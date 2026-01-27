@@ -49,9 +49,9 @@ export default async function ClientsPage({
 
 function ClientsSkeleton() {
     return (
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {[...Array(4)].map((_, i) => (
-                <Skeleton key={i} className="h-[200px] w-full rounded-xl" />
+        <div className="flex flex-col gap-4">
+            {[...Array(5)].map((_, i) => (
+                <Skeleton key={i} className="h-20 w-full rounded-xl" />
             ))}
         </div>
     )

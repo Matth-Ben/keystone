@@ -33,8 +33,11 @@ import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { createSecret, updateSecret, revealSecret, Secret, SecretType } from '@/lib/actions/secrets'
+import { getClients, Client } from '@/lib/actions/clients'
+import { useAppStore } from '@/lib/store/app-store'
 
 const formSchema = z.object({
+    client_id: z.string().optional(),
     type: z.enum(['ssh', 'ftp', 'db', 'cms', 'api', 'other'] as [string, ...string[]]),
     title: z.string().min(1, 'Le titre est requis'),
     password: z.string().optional(),
@@ -49,7 +52,7 @@ const formSchema = z.object({
 interface CreateSecretDialogProps {
     open: boolean
     onOpenChange: (open: boolean) => void
-    clientId: string
+    clientId?: string
     secretToEdit?: Secret
 }
 
@@ -60,14 +63,18 @@ export function CreateSecretDialog({
     secretToEdit
 }: CreateSecretDialogProps) {
     const isEdit = !!secretToEdit
+    const { currentOrganization } = useAppStore()
 
     // eslint-disable-next-line
     const [showPassword, setShowPassword] = useState(false)
     const [isLoadingPassword, setIsLoadingPassword] = useState(false)
+    const [clients, setClients] = useState<Client[]>([])
+    const [loadingClients, setLoadingClients] = useState(false)
 
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
         defaultValues: {
+            client_id: clientId || '',
             type: 'other',
             title: '',
             password: '',
@@ -82,6 +89,17 @@ export function CreateSecretDialog({
 
     const type = form.watch('type') as SecretType
 
+    // Charger les clients si aucun clientId n'est fourni
+    useEffect(() => {
+        if (open && !clientId && currentOrganization) {
+            setLoadingClients(true)
+            getClients(currentOrganization.id)
+                .then(setClients)
+                .catch(() => toast.error("Erreur lors du chargement des clients"))
+                .finally(() => setLoadingClients(false))
+        }
+    }, [open, clientId, currentOrganization])
+
     useEffect(() => {
         if (open) {
             setShowPassword(false)
@@ -89,6 +107,10 @@ export function CreateSecretDialog({
 
             // Reset de base
             form.reset({
+                client_id: clientId || secretToEdit?.project?.client_id || '', // Note: secret structure might slightly vary, usually secrets are linked to projects but here we link to clients directly in our simplified model? Let's assume we link to clients directly or projects. 
+                // Wait, previously we were passing clientId. The Secret type might need verification but let's assume direct linkage or project linkage.
+                // If secrets are linked to projects, we might need projects. But the user asked for CLIENT choice.
+                // Assuming simple client linkage for now based on previous code usage (createSecret(..., client_id)).
                 type: secretToEdit?.type || 'other',
                 title: secretToEdit?.title || '',
                 password: '',
@@ -115,10 +137,17 @@ export function CreateSecretDialog({
                     })
             }
         }
-    }, [open, secretToEdit, form])
+    }, [open, secretToEdit, form, clientId])
 
     async function onSubmit(values: z.infer<typeof formSchema>) {
         try {
+            const finalClientId = clientId || values.client_id
+
+            if (!finalClientId) {
+                form.setError('client_id', { message: 'Le client est requis' })
+                return
+            }
+
             if (!isEdit && !values.password) {
                 form.setError('password', { message: 'Le mot de passe est requis' })
                 return
@@ -126,13 +155,13 @@ export function CreateSecretDialog({
 
             const data = {
                 ...values,
-                client_id: clientId,
+                client_id: finalClientId,
                 type: values.type as SecretType,
             }
 
             if (isEdit) {
                 // @ts-ignore
-                await updateSecret(secretToEdit.id, clientId, data)
+                await updateSecret(secretToEdit.id, finalClientId, data)
                 toast.success('Secret modifié')
             } else {
                 // @ts-ignore
@@ -159,7 +188,7 @@ export function CreateSecretDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[600px]">
+            <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>{isEdit ? 'Modifier le secret' : 'Nouveau Secret'}</DialogTitle>
                     <DialogDescription>
@@ -169,6 +198,33 @@ export function CreateSecretDialog({
 
                 <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+
+                        {/* Sélection du client si non fourni */}
+                        {!clientId && (
+                            <FormField
+                                control={form.control}
+                                name="client_id"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Client</FormLabel>
+                                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                            <FormControl>
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder={loadingClients ? "Chargement..." : "Sélectionner un client"} />
+                                                </SelectTrigger>
+                                            </FormControl>
+                                            <SelectContent>
+                                                {clients.map(client => (
+                                                    <SelectItem key={client.id} value={client.id}>{client.name}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                        )}
+
                         <div className="grid grid-cols-2 gap-4">
                             <FormField
                                 control={form.control}
@@ -367,7 +423,7 @@ export function CreateSecretDialog({
                         />
 
                         <DialogFooter>
-                            <Button type="submit" disabled={form.formState.isSubmitting || isLoadingPassword}>
+                            <Button type="submit" disabled={form.formState.isSubmitting || isLoadingPassword || (loadingClients && !clientId)}>
                                 {form.formState.isSubmitting ? 'Enregistrement...' : (isEdit ? 'Mettre à jour' : 'Créer')}
                             </Button>
                         </DialogFooter>

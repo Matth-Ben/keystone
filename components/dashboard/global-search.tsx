@@ -109,7 +109,7 @@ export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
     }
 
     return (
-        <CommandDialog open={open} onOpenChange={onOpenChange}>
+        <CommandDialog open={open} onOpenChange={onOpenChange} shouldFilter={false}>
             <CommandInput
                 placeholder="Rechercher des clients, projets, secrets..."
                 value={query}
@@ -133,6 +133,7 @@ export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
                             return (
                                 <CommandItem
                                     key={`${result.type}-${result.id}`}
+                                    value={`${result.type}-${result.id}-${result.name}`}
                                     onSelect={() => handleSelect(result)}
                                     className="cursor-pointer"
                                 >
@@ -158,6 +159,7 @@ export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
                             return (
                                 <CommandItem
                                     key={`${result.type}-${result.id}`}
+                                    value={`${result.type}-${result.id}-${result.name}`}
                                     onSelect={() => handleSelect(result)}
                                     className="cursor-pointer"
                                 >
@@ -183,6 +185,7 @@ export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
                             return (
                                 <CommandItem
                                     key={`${result.type}-${result.id}`}
+                                    value={`${result.type}-${result.id}-${result.name}`}
                                     onSelect={() => handleSelect(result)}
                                     className="cursor-pointer"
                                 >

@@ -114,8 +114,8 @@ export function CreateClientDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             {!isControlled && (
                 <DialogTrigger asChild>
-                    <Button>
-                        <Plus className="mr-2 h-4 w-4" />
+                    <Button size="sm" className="gap-1.5">
+                        <Plus className="h-4 w-4" />
                         Nouveau Client
                     </Button>
                 </DialogTrigger>

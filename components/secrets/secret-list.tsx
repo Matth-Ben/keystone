@@ -97,11 +97,18 @@ export function SecretList({ secrets, clientId }: SecretListProps) {
     const [secretToEdit, setSecretToEdit] = useState<Secret | undefined>(undefined)
     const [secretToDelete, setSecretToDelete] = useState<Secret | undefined>(undefined)
 
-    const filteredSecrets = secrets.filter(secret =>
-        secret.title.toLowerCase().includes(search.toLowerCase()) ||
-        secret.username?.toLowerCase().includes(search.toLowerCase()) ||
-        secret.host?.toLowerCase().includes(search.toLowerCase())
-    )
+    const filteredSecrets = secrets.filter(secret => {
+        const term = search.toLowerCase()
+        return (
+            secret.title.toLowerCase().includes(term) ||
+            secret.username?.toLowerCase().includes(term) ||
+            secret.host?.toLowerCase().includes(term) ||
+            secret.db_name?.toLowerCase().includes(term) ||
+            secret.url?.toLowerCase().includes(term) ||
+            secret.notes?.toLowerCase().includes(term) ||
+            TYPE_LABELS[secret.type].toLowerCase().includes(term)
+        )
+    })
 
     const handleDelete = async () => {
         if (!secretToDelete) return
@@ -129,8 +136,8 @@ export function SecretList({ secrets, clientId }: SecretListProps) {
                 <Button onClick={() => {
                     setSecretToEdit(undefined)
                     setIsCreateOpen(true)
-                }} className="w-full sm:w-auto">
-                    <Plus className="mr-2 h-4 w-4" />
+                }} size="sm" className="w-full sm:w-auto gap-1.5">
+                    <Plus className="h-4 w-4" />
                     Nouveau Secret
                 </Button>
             </div>

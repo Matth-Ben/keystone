@@ -45,7 +45,7 @@ export function ClientsGrid({ clients, searchQuery, hasOrganization }: ClientsGr
     }
 
     return (
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="flex flex-col gap-4">
             {clients.map((client) => (
                 <ClientCard key={client.id} client={client} />
             ))}
