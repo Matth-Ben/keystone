@@ -1,0 +1,100 @@
+'use server'
+
+import { createClient } from '@/lib/supabase/server'
+
+export async function getUserOrganizations() {
+    const supabase = await createClient()
+
+    const {
+        data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+        throw new Error('Non authentifié')
+    }
+
+    // Récupérer les organisations dont l'utilisateur est membre
+    const { data: memberships, error } = await supabase
+        .from('organization_members')
+        .select(`
+            role,
+            organizations (
+                id,
+                name,
+                slug
+            )
+        `)
+        .eq('user_id', user.id)
+
+    if (error) {
+        console.error('Error fetching organizations:', error)
+        throw new Error('Erreur lors de la récupération des organisations')
+    }
+
+    // Transformer les données pour avoir un format plus simple
+    const organizations = memberships?.map((membership: any) => ({
+        id: membership.organizations.id,
+        name: membership.organizations.name,
+        slug: membership.organizations.slug,
+        role: membership.role,
+    })) || []
+
+    return organizations
+}
+
+export async function createOrganization(name: string) {
+    const supabase = await createClient()
+
+    const {
+        data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+        throw new Error('Non authentifié')
+    }
+
+    // Créer le slug à partir du nom
+    const slug = name
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '') // Retirer les accents
+        .replace(/[^a-z0-9]+/g, '-') // Remplacer les caractères spéciaux par des tirets
+        .replace(/^-+|-+$/g, '') // Retirer les tirets au début et à la fin
+
+    // Créer l'organisation
+    const { data: organization, error: orgError } = await supabase
+        .from('organizations')
+        .insert({
+            name,
+            slug,
+            owner_id: user.id,
+        })
+        .select()
+        .single()
+
+    if (orgError) {
+        console.error('Error creating organization:', orgError)
+        throw new Error('Erreur lors de la création de l\'organisation')
+    }
+
+    // Ajouter l'utilisateur comme admin de l'organisation
+    const { error: memberError } = await supabase
+        .from('organization_members')
+        .insert({
+            organization_id: organization.id,
+            user_id: user.id,
+            role: 'admin',
+        })
+
+    if (memberError) {
+        console.error('Error adding user to organization:', memberError)
+        throw new Error('Erreur lors de l\'ajout de l\'utilisateur à l\'organisation')
+    }
+
+    return {
+        id: organization.id,
+        name: organization.name,
+        slug: organization.slug,
+        role: 'admin' as const,
+    }
+}
