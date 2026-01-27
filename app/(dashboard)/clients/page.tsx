@@ -1,5 +1,5 @@
 import { Suspense } from 'react'
-import { getClients } from '@/lib/actions/clients'
+import { getClients, Client } from '@/lib/actions/clients'
 import { getOrganizationCookie } from '@/lib/actions/organization-cookie'
 import { ClientsGrid } from '@/components/clients/clients-grid'
 import { ClientSearch } from '@/components/clients/client-search'
@@ -15,7 +15,7 @@ export default async function ClientsPage({
     const query = (filters.q as string) || ''
     const organizationId = await getOrganizationCookie()
 
-    let clients = []
+    let clients: Client[] = []
     if (organizationId) {
         clients = await getClients(organizationId, query)
     }
