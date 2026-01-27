@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Home, Users, Settings, Star, Clock } from 'lucide-react'
 import { OrganizationSwitcher } from './organization-switcher'
-import { useAppStore } from '@/lib/store/app-store'
+import { useAppStore, Favorite } from '@/lib/store/app-store'
 import { cn } from '@/lib/utils'
 import { Separator } from '@/components/ui/separator'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -14,9 +14,17 @@ const navigation = [
     { name: 'Paramètres', href: '/settings', icon: Settings },
 ]
 
-export function Sidebar() {
+import { Organization } from '@/lib/store/app-store'
+
+interface SidebarProps {
+    favorites: Favorite[]
+    organizations: Organization[]
+    currentOrgId?: string
+}
+
+export function Sidebar({ favorites, organizations, currentOrgId }: SidebarProps) {
     const pathname = usePathname()
-    const { favorites, recents } = useAppStore()
+    const { recents } = useAppStore()
 
     return (
         <div className="flex h-full w-64 flex-col border-r bg-background">
@@ -33,7 +41,10 @@ export function Sidebar() {
             <ScrollArea className="flex-1 px-3 py-4">
                 {/* Organization Switcher */}
                 <div className="mb-4">
-                    <OrganizationSwitcher />
+                    <OrganizationSwitcher
+                        initialOrganizations={organizations}
+                        initialOrgId={currentOrgId}
+                    />
                 </div>
 
                 <Separator className="my-4" />

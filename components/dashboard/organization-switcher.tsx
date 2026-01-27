@@ -20,27 +20,50 @@ import {
 } from '@/components/ui/popover'
 import { useAppStore, type Organization } from '@/lib/store/app-store'
 import { getUserOrganizations } from '@/lib/actions/organizations'
+import { setOrganizationCookie } from '@/lib/actions/organization-cookie'
+import { CreateOrganizationDialog } from './create-organization-dialog'
 import { toast } from 'sonner'
 
-export function OrganizationSwitcher() {
+interface OrganizationSwitcherProps {
+    initialOrganizations?: Organization[]
+    initialOrgId?: string
+}
+
+export function OrganizationSwitcher({
+    initialOrganizations = [],
+    initialOrgId
+}: OrganizationSwitcherProps) {
     const [open, setOpen] = useState(false)
-    const [organizations, setOrganizations] = useState<Organization[]>([])
-    const [loading, setLoading] = useState(true)
+    const [createDialogOpen, setCreateDialogOpen] = useState(false)
+    const [organizations, setOrganizations] = useState<Organization[]>(initialOrganizations)
+    const [loading, setLoading] = useState(initialOrganizations.length === 0)
     const { currentOrganization, setCurrentOrganization } = useAppStore()
     const router = useRouter()
 
     useEffect(() => {
-        loadOrganizations()
+        // Hydrater le store si besoin
+        if (initialOrgId && !currentOrganization && initialOrganizations.length > 0) {
+            const org = initialOrganizations.find(o => o.id === initialOrgId)
+            if (org) setCurrentOrganization(org)
+        } else if (organizations.length === 0) {
+            // Fallback: charger si pas de données initiales
+            loadOrganizations()
+        } else {
+            setLoading(false)
+        }
     }, [])
 
     const loadOrganizations = async () => {
         try {
+            setLoading(true)
             const orgs = await getUserOrganizations()
             setOrganizations(orgs)
 
-            // Si aucune organisation active, sélectionner la première
             if (!currentOrganization && orgs.length > 0) {
-                setCurrentOrganization(orgs[0])
+                const defaultOrg = orgs[0]
+                setCurrentOrganization(defaultOrg)
+                await setOrganizationCookie(defaultOrg.id)
+                router.refresh()
             }
         } catch (error: any) {
             toast.error('Erreur', {
@@ -51,8 +74,9 @@ export function OrganizationSwitcher() {
         }
     }
 
-    const handleSelectOrganization = (org: Organization) => {
+    const handleSelectOrganization = async (org: Organization) => {
         setCurrentOrganization(org)
+        await setOrganizationCookie(org.id)
         setOpen(false)
         toast.success('Organisation changée', {
             description: `Vous êtes maintenant dans ${org.name}`,
@@ -62,10 +86,12 @@ export function OrganizationSwitcher() {
 
     const handleCreateOrganization = () => {
         setOpen(false)
-        // TODO: Ouvrir un dialog pour créer une organisation (Étape 4)
-        toast.info('Fonctionnalité à venir', {
-            description: 'La création d\'organisation sera disponible à l\'étape 4',
-        })
+        setCreateDialogOpen(true)
+    }
+
+    const handleOrganizationCreated = () => {
+        // Recharger les organisations
+        loadOrganizations()
     }
 
     if (loading) {
@@ -81,72 +107,88 @@ export function OrganizationSwitcher() {
 
     if (organizations.length === 0) {
         return (
-            <Button
-                variant="outline"
-                className="w-full justify-start"
-                onClick={handleCreateOrganization}
-            >
-                <Plus className="mr-2 h-4 w-4" />
-                Créer une organisation
-            </Button>
+            <>
+                <Button
+                    variant="outline"
+                    className="w-full justify-start"
+                    onClick={handleCreateOrganization}
+                >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Créer une organisation
+                </Button>
+
+                <CreateOrganizationDialog
+                    open={createDialogOpen}
+                    onOpenChange={setCreateDialogOpen}
+                    onSuccess={handleOrganizationCreated}
+                />
+            </>
         )
     }
 
     return (
-        <Popover open={open} onOpenChange={setOpen}>
-            <PopoverTrigger asChild>
-                <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={open}
-                    className="w-full justify-between"
-                >
-                    <div className="flex items-center gap-2 truncate">
-                        <div className="flex h-6 w-6 items-center justify-center rounded bg-primary text-xs font-semibold text-primary-foreground">
-                            {currentOrganization?.name.charAt(0).toUpperCase()}
+        <>
+            <Popover open={open} onOpenChange={setOpen}>
+                <PopoverTrigger asChild>
+                    <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={open}
+                        className="w-full justify-between"
+                    >
+                        <div className="flex items-center gap-2 truncate">
+                            <div className="flex h-6 w-6 items-center justify-center rounded bg-primary text-xs font-semibold text-primary-foreground">
+                                {currentOrganization?.name.charAt(0).toUpperCase()}
+                            </div>
+                            <span className="truncate">{currentOrganization?.name || 'Sélectionner...'}</span>
                         </div>
-                        <span className="truncate">{currentOrganization?.name || 'Sélectionner...'}</span>
-                    </div>
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-[300px] p-0">
-                <Command>
-                    <CommandInput placeholder="Rechercher une organisation..." />
-                    <CommandList>
-                        <CommandEmpty>Aucune organisation trouvée.</CommandEmpty>
-                        <CommandGroup heading="Organisations">
-                            {organizations.map((org) => (
-                                <CommandItem
-                                    key={org.id}
-                                    onSelect={() => handleSelectOrganization(org)}
-                                    className="cursor-pointer"
-                                >
-                                    <Check
-                                        className={`mr-2 h-4 w-4 ${currentOrganization?.id === org.id
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[300px] p-0">
+                    <Command>
+                        <CommandInput placeholder="Rechercher une organisation..." />
+                        <CommandList>
+                            <CommandEmpty>Aucune organisation trouvée.</CommandEmpty>
+                            <CommandGroup heading="Organisations">
+                                {organizations.map((org) => (
+                                    <CommandItem
+                                        key={org.id}
+                                        onSelect={() => handleSelectOrganization(org)}
+                                        className="cursor-pointer"
+                                    >
+                                        <Check
+                                            className={`mr-2 h-4 w-4 ${currentOrganization?.id === org.id
                                                 ? 'opacity-100'
                                                 : 'opacity-0'
-                                            }`}
-                                    />
-                                    <div className="flex flex-1 items-center justify-between">
-                                        <span>{org.name}</span>
-                                        <span className="text-xs text-muted-foreground capitalize">
-                                            {org.role}
-                                        </span>
-                                    </div>
+                                                }`}
+                                        />
+                                        <div className="flex flex-1 items-center justify-between">
+                                            <span>{org.name}</span>
+                                            <span className="text-xs text-muted-foreground capitalize">
+                                                {org.role}
+                                            </span>
+                                        </div>
+                                    </CommandItem>
+                                ))}
+                            </CommandGroup>
+                            <CommandSeparator />
+                            <CommandGroup>
+                                <CommandItem onSelect={handleCreateOrganization} className="cursor-pointer">
+                                    <Plus className="mr-2 h-4 w-4" />
+                                    Créer une organisation
                                 </CommandItem>
-                            ))}
-                        </CommandGroup>
-                        <CommandSeparator />
-                        <CommandGroup>
-                            <CommandItem onSelect={handleCreateOrganization} className="cursor-pointer">
-                                <Plus className="mr-2 h-4 w-4" />
-                                Créer une organisation
-                            </CommandItem>
-                        </CommandGroup>
-                    </CommandList>
-                </Command>
-            </PopoverContent>
-        </Popover>
+                            </CommandGroup>
+                        </CommandList>
+                    </Command>
+                </PopoverContent>
+            </Popover>
+
+            <CreateOrganizationDialog
+                open={createDialogOpen}
+                onOpenChange={setCreateDialogOpen}
+                onSuccess={handleOrganizationCreated}
+            />
+        </>
     )
 }

@@ -2,6 +2,8 @@
 
 import { createClient } from '@/lib/supabase/server'
 
+import { createAdminClient } from '@/lib/supabase/admin'
+
 export async function getFavorites() {
     const supabase = await createClient()
 
@@ -27,25 +29,28 @@ export async function getFavorites() {
         throw new Error('Erreur lors de la récupération des favoris')
     }
 
+    // Utiliser le client admin pour récupérer les noms (contourner RLS)
+    const adminClient = createAdminClient()
+
     // Pour chaque favori, récupérer le nom de la ressource
     const favoritesWithNames = await Promise.all(
-        favorites.map(async (fav) => {
+        favorites.map(async (fav: any) => {
             let resourceName = 'Unknown'
 
             if (fav.resource_type === 'client') {
-                const { data: client } = await supabase
+                const { data: client } = await adminClient
                     .from('clients')
                     .select('name')
                     .eq('id', fav.resource_id)
                     .single()
-                resourceName = client?.name || 'Unknown'
+                resourceName = client?.name || 'Client inconnu'
             } else if (fav.resource_type === 'project') {
-                const { data: project } = await supabase
+                const { data: project } = await adminClient
                     .from('projects')
                     .select('name')
                     .eq('id', fav.resource_id)
                     .single()
-                resourceName = project?.name || 'Unknown'
+                resourceName = project?.name || 'Projet inconnu'
             }
 
             return {

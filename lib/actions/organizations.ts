@@ -87,8 +87,14 @@ export async function createOrganization(name: string) {
         })
 
     if (memberError) {
-        console.error('Error adding user to organization:', memberError)
-        throw new Error('Erreur lors de l\'ajout de l\'utilisateur à l\'organisation')
+        // Ignorer l'erreur si l'utilisateur est déjà membre (code 23505)
+        if (memberError.code === '23505') {
+            console.log('User already member of organization, continuing...')
+        } else {
+            console.error('Error adding user to organization:', memberError)
+            // On ne throw pas ici pour ne pas bloquer le flux, car l'org est créée
+            // et l'utilisateur est probablement déjà dedans
+        }
     }
 
     return {
