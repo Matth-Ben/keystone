@@ -38,11 +38,11 @@ import { formatDistanceToNow } from 'date-fns'
 import { fr } from 'date-fns/locale'
 
 interface SecretListProps {
-    secrets: Secret[]
-    clientId: string
+    secrets: (Secret & { clients?: { name: string } | null })[]
+    clientId?: string
 }
 
-const TYPE_ICONS: Record<SecretType, any> = {
+export const TYPE_ICONS: Record<SecretType, any> = {
     db: Database,
     ssh: Server,
     ftp: Folder,
@@ -51,7 +51,7 @@ const TYPE_ICONS: Record<SecretType, any> = {
     other: FileText
 }
 
-const TYPE_LABELS: Record<SecretType, string> = {
+export const TYPE_LABELS: Record<SecretType, string> = {
     db: 'Base de données',
     ssh: 'Serveur (SSH)',
     ftp: 'FTP / SFTP',
@@ -98,22 +98,32 @@ export function SecretList({ secrets, clientId }: SecretListProps) {
     const [secretToDelete, setSecretToDelete] = useState<Secret | undefined>(undefined)
 
     const filteredSecrets = secrets.filter(secret => {
-        const term = search.toLowerCase()
-        return (
-            secret.title.toLowerCase().includes(term) ||
-            secret.username?.toLowerCase().includes(term) ||
-            secret.host?.toLowerCase().includes(term) ||
-            secret.db_name?.toLowerCase().includes(term) ||
-            secret.url?.toLowerCase().includes(term) ||
-            secret.notes?.toLowerCase().includes(term) ||
-            TYPE_LABELS[secret.type].toLowerCase().includes(term)
-        )
+        const terms = search.toLowerCase().split(/\s+/).filter(t => t.length > 0)
+        if (terms.length === 0) return true
+
+        const clientName = secret.clients?.name?.toLowerCase() || ''
+        const typeLabel = TYPE_LABELS[secret.type]?.toLowerCase() || ''
+
+        // Construire une chaîne complète de recherche pour cet élément
+        const searchableContent = [
+            secret.title,
+            clientName,
+            secret.username,
+            secret.host,
+            secret.db_name,
+            secret.url,
+            secret.notes,
+            typeLabel
+        ].filter(Boolean).join(' ').toLowerCase()
+
+        // Vérifier que CHAQUE terme de recherche est présent dans le contenu
+        return terms.every(term => searchableContent.includes(term))
     })
 
     const handleDelete = async () => {
         if (!secretToDelete) return
         try {
-            await deleteSecret(secretToDelete.id, clientId)
+            await deleteSecret(secretToDelete.id, clientId || secretToDelete.client_id)
             toast.success('Secret supprimé')
             setSecretToDelete(undefined)
         } catch (error) {
@@ -127,7 +137,7 @@ export function SecretList({ secrets, clientId }: SecretListProps) {
                 <div className="relative w-full sm:max-w-md">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
-                        placeholder="Rechercher des secrets..."
+                        placeholder="Rechercher des secrets, clients..."
                         className="pl-9"
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
@@ -170,8 +180,13 @@ export function SecretList({ secrets, clientId }: SecretListProps) {
                                                 <Icon className="h-5 w-5" />
                                             </div>
                                             <div>
-                                                <CardTitle className="text-base font-semibold leading-none mb-1.5">
+                                                <CardTitle className="text-base font-semibold leading-none mb-1.5 flex items-center gap-2">
                                                     {secret.title}
+                                                    {!clientId && secret.clients?.name && (
+                                                        <Badge variant="outline" className="text-[10px] font-normal h-5 px-1.5 text-muted-foreground">
+                                                            {secret.clients.name}
+                                                        </Badge>
+                                                    )}
                                                 </CardTitle>
                                                 <Badge variant="secondary" className="font-normal text-xs">
                                                     {TYPE_LABELS[secret.type]}
@@ -262,7 +277,7 @@ export function SecretList({ secrets, clientId }: SecretListProps) {
             <CreateSecretDialog
                 open={isCreateOpen}
                 onOpenChange={setIsCreateOpen}
-                clientId={clientId}
+                clientId={clientId || ''} // Attention ici, si pas de clientId, le dialog est en mode orphelin
                 secretToEdit={secretToEdit}
             />
 

@@ -74,7 +74,7 @@ export function Topbar({ onOpenSearch }: TopbarProps) {
             {/* Search button */}
             <Button
                 variant="outline"
-                className="hidden md:flex w-64 justify-start text-muted-foreground mr-auto"
+                className="hidden md:flex w-64 justify-start text-muted-foreground"
                 onClick={onOpenSearch}
             >
                 <Search className="mr-2 h-4 w-4" />

@@ -5,7 +5,7 @@ import { Sidebar } from '@/components/dashboard/sidebar'
 import { Topbar } from '@/components/dashboard/topbar'
 import { GlobalSearch } from '@/components/dashboard/global-search'
 import { useAppStore } from '@/lib/store/app-store'
-import { Sheet, SheetContent } from '@/components/ui/sheet'
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { Favorite, Organization } from '@/lib/store/app-store'
 import { DashboardInitializer } from '@/components/dashboard/dashboard-initializer'
 
@@ -31,6 +31,7 @@ export function DashboardShell({ children, favorites, organizations, currentOrgI
             {/* Mobile Sidebar */}
             <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
                 <SheetContent side="left" className="w-64 p-0">
+                    <SheetTitle className="sr-only">Menu de navigation</SheetTitle>
                     <Sidebar favorites={favorites} organizations={organizations} currentOrgId={currentOrgId} />
                 </SheetContent>
             </Sheet>

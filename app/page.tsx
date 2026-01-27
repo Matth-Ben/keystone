@@ -16,11 +16,11 @@ export default async function Home() {
         redirect('/onboarding')
       }
 
-      // Sinon, rediriger vers clients
-      redirect('/clients')
+      // Sinon, rediriger vers secrets
+      redirect('/secrets')
     } catch (error) {
-      // En cas d'erreur, rediriger vers clients
-      redirect('/clients')
+      // En cas d'erreur, rediriger vers secrets
+      redirect('/secrets')
     }
   }
 

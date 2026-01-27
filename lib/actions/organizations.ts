@@ -97,10 +97,76 @@ export async function createOrganization(name: string) {
         }
     }
 
+    // ... (existing code for createOrganization)
     return {
         id: organization.id,
         name: organization.name,
         slug: organization.slug,
         role: 'admin' as const,
     }
+}
+
+export interface OrganizationDetails {
+    id: string
+    name: string
+    slug: string
+    logo_url?: string | null
+    description?: string | null
+    links?: { label: string; url: string }[] | null
+}
+
+export async function getOrganization(organizationId: string): Promise<OrganizationDetails> {
+    const supabase = await createClient()
+
+    const { data, error } = await supabase
+        .from('organizations')
+        .select('id, name, slug, logo_url, description, links')
+        .eq('id', organizationId)
+        .single()
+
+    if (error) {
+        console.error('Error fetching organization:', error)
+        throw new Error('Organisation introuvable')
+    }
+
+    return data
+}
+
+import { revalidatePath } from 'next/cache'
+
+// ...
+
+export async function updateOrganization(
+    organizationId: string,
+    data: {
+        name: string
+        logo_url?: string
+        description?: string
+        links?: { label: string; url: string }[]
+    }
+) {
+    const supabase = await createClient()
+
+    console.log('UPDATING Organization', organizationId, data)
+
+    // Vérifier les droits (RLS devrait gérer, mais on peut vérifier membership admin ici si besoin)
+    // Pour l'instant on fait confiance aux policies Supabase + vérif auth
+
+    const { error } = await supabase
+        .from('organizations')
+        .update({
+            name: data.name,
+            logo_url: data.logo_url,
+            description: data.description,
+            links: data.links,
+        })
+        .eq('id', organizationId)
+
+    if (error) {
+        console.error('Error updating organization:', error)
+        throw new Error("Erreur lors de la mise à jour de l'organisation")
+    }
+
+    revalidatePath('/organization')
+    return { success: true }
 }

@@ -37,6 +37,31 @@ export interface SecretFormData {
     notes?: string
 }
 
+export async function getAllSecrets(organizationId: string): Promise<(Secret & { clients: { name: string } | null })[]> {
+    const supabase = await createClient() as any
+
+    const { data, error } = await supabase
+        .from('secrets')
+        .select(`
+            *,
+            clients!inner (
+                id,
+                name,
+                organization_id
+            )
+        `)
+        .eq('clients.organization_id', organizationId)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false })
+
+    if (error) {
+        console.error('Error fetching all secrets:', error)
+        throw new Error('Erreur lors du chargement des secrets')
+    }
+
+    return data as (Secret & { clients: { name: string } | null })[]
+}
+
 export async function getSecrets(clientId: string): Promise<Secret[]> {
     const supabase = await createClient() as any
 
@@ -87,6 +112,7 @@ export async function createSecret(data: SecretFormData) {
     }
 
     revalidatePath(`/clients/${data.client_id}`)
+    revalidatePath('/secrets')
 }
 
 export async function revealSecret(secretId: string): Promise<string> {
@@ -126,6 +152,7 @@ export async function deleteSecret(secretId: string, clientId: string) {
     }
 
     revalidatePath(`/clients/${clientId}`)
+    revalidatePath('/secrets')
 }
 
 export async function updateSecret(secretId: string, clientId: string, data: Partial<SecretFormData>) {
@@ -160,4 +187,5 @@ export async function updateSecret(secretId: string, clientId: string, data: Par
     }
 
     revalidatePath(`/clients/${clientId}`)
+    revalidatePath('/secrets')
 }

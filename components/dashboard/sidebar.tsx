@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Users, Settings, Star, Clock } from 'lucide-react'
+import { Home, Users, Settings, Star, Clock, Key, Building2 } from 'lucide-react'
 import { OrganizationSwitcher } from './organization-switcher'
 import { useAppStore, Favorite } from '@/lib/store/app-store'
 import { cn } from '@/lib/utils'
@@ -10,7 +10,9 @@ import { Separator } from '@/components/ui/separator'
 import { ScrollArea } from '@/components/ui/scroll-area'
 
 const navigation = [
+    { name: 'Secrets', href: '/secrets', icon: Key },
     { name: 'Clients', href: '/clients', icon: Users },
+    { name: 'Organisation', href: '/organization', icon: Building2 },
     { name: 'Paramètres', href: '/settings', icon: Settings },
 ]
 
@@ -30,7 +32,7 @@ export function Sidebar({ favorites, organizations, currentOrgId }: SidebarProps
         <div className="flex h-full w-64 flex-col border-r bg-background">
             {/* Logo */}
             <div className="flex h-16 items-center border-b px-6">
-                <Link href="/clients" className="flex items-center gap-2">
+                <Link href="/secrets" className="flex items-center gap-2">
                     <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
                         <span className="text-lg font-bold">K</span>
                     </div>
