@@ -36,7 +36,7 @@ export async function globalSearch(query: string, organizationId: string): Promi
 
     if (clients) {
         results.push(
-            ...clients.map((client) => ({
+            ...clients.map((client: any) => ({
                 type: 'client' as const,
                 id: client.id,
                 name: client.name,

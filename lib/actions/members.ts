@@ -35,7 +35,7 @@ export async function getOrganizationMembers(organizationId: string) {
 
     // Récupérer les membres avec leurs informations utilisateur
     // On utilise le client ADMIN pour contourner le RLS qui empêche de voir les autres
-    const adminClient = createAdminClient()
+    const adminClient = createAdminClient() as any
 
     const { data: members, error } = await adminClient
         .from('organization_members')
@@ -95,7 +95,7 @@ export async function updateMemberRole(
     }
 
     // Utiliser admin client pour lire et modifier
-    const adminClient = createAdminClient()
+    const adminClient = createAdminClient() as any
 
     // Récupérer le membre à modifier
     const { data: memberToUpdate } = await adminClient
@@ -137,7 +137,7 @@ export async function updateMemberRole(
     // Mettre à jour le rôle
     const { error } = await adminClient
         .from('organization_members')
-        .update({ role: newRole })
+        .update({ role: newRole } as any)
         .eq('id', memberId)
 
     if (error) {
@@ -159,7 +159,7 @@ export async function removeMember(memberId: string) {
         throw new Error('Non authentifié')
     }
 
-    const adminClient = createAdminClient()
+    const adminClient = createAdminClient() as any
 
     // Récupérer le membre à retirer
     const { data: memberToRemove } = await adminClient

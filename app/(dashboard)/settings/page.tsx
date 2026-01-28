@@ -1,22 +1,19 @@
-'use client'
+import { getUserProfile } from '@/lib/actions/user-actions'
+import { GeneralSettingsForm } from '@/components/settings/general-settings-form'
 
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+export default async function GeneralSettingsPage() {
+    const profile = await getUserProfile()
 
-export default function SettingsPage() {
     return (
         <div className="space-y-6">
             <div>
-                <h1 className="text-3xl font-bold tracking-tight">Paramètres</h1>
+                <h2 className="text-2xl font-bold tracking-tight">Profil</h2>
                 <p className="text-muted-foreground">
-                    Gérez vos préférences personnelles
+                    Gérez vos informations personnelles
                 </p>
             </div>
 
-            <div className="rounded-lg border bg-card p-8 text-center">
-                <p className="text-muted-foreground">
-                    Paramètres de profil utilisateur à venir.
-                </p>
-            </div>
+            <GeneralSettingsForm profile={profile} />
         </div>
     )
 }

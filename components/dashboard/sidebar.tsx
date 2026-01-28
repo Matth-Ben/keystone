@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Users, Settings, Star, Clock, Key, Building2 } from 'lucide-react'
+import { Home, Users, Star, Clock, Key, Building2 } from 'lucide-react'
 import { OrganizationSwitcher } from './organization-switcher'
 import { useAppStore, Favorite } from '@/lib/store/app-store'
 import { cn } from '@/lib/utils'
@@ -13,7 +13,6 @@ const navigation = [
     { name: 'Secrets', href: '/secrets', icon: Key },
     { name: 'Clients', href: '/clients', icon: Users },
     { name: 'Organisation', href: '/organization', icon: Building2 },
-    { name: 'Paramètres', href: '/settings', icon: Settings },
 ]
 
 import { Organization } from '@/lib/store/app-store'

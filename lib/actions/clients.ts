@@ -11,6 +11,7 @@ export interface Client {
     description: string | null
     organization_id: string
     logo: string | null
+    links?: { label: string; url: string }[] | null
     created_at: string
 }
 
@@ -94,7 +95,7 @@ export async function createClient(data: {
     await checkOrganizationAccess(data.organizationId)
 
     // 2. Création (Admin Client)
-    const adminClient = createAdminClient()
+    const adminClient = createAdminClient() as any
 
     const { data: newClient, error } = await adminClient
         .from('clients')
@@ -103,7 +104,7 @@ export async function createClient(data: {
             website: data.website,
             description: data.description,
             organization_id: data.organizationId,
-        })
+        } as any)
         .select()
         .single()
 
@@ -120,12 +121,13 @@ export async function updateClient(clientId: string, data: {
     name?: string
     website?: string
     description?: string
+    links?: { label: string; url: string }[]
 }) {
     // 1. Récupérer le client pour vérifier l'org
     const currentClient = await getClient(clientId) // Vérifie déjà l'accès
 
     // 2. Mise à jour
-    const adminClient = createAdminClient()
+    const adminClient = createAdminClient() as any
 
     const { error } = await adminClient
         .from('clients')
@@ -133,7 +135,8 @@ export async function updateClient(clientId: string, data: {
             name: data.name,
             website: data.website,
             description: data.description,
-        })
+            links: data.links,
+        } as any)
         .eq('id', clientId)
 
     if (error) {

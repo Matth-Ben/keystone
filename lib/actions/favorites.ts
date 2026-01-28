@@ -93,14 +93,14 @@ export async function toggleFavorite(
         const { error } = await supabase
             .from('favorites')
             .delete()
-            .eq('id', existing.id)
+            .eq('id', (existing as any).id)
 
         if (error) {
             console.error('Error removing favorite:', error)
             throw new Error('Erreur lors de la suppression du favori')
         }
 
-        return { action: 'removed', id: existing.id }
+        return { action: 'removed', id: (existing as any).id }
     } else {
         // Ajouter le favori
         const { data: newFavorite, error } = await supabase
@@ -109,7 +109,7 @@ export async function toggleFavorite(
                 user_id: user.id,
                 resource_type: resourceType,
                 resource_id: resourceId,
-            })
+            } as any)
             .select()
             .single()
 
@@ -118,6 +118,6 @@ export async function toggleFavorite(
             throw new Error('Erreur lors de l\'ajout du favori')
         }
 
-        return { action: 'added', id: newFavorite.id }
+        return { action: 'added', id: (newFavorite as any).id }
     }
 }

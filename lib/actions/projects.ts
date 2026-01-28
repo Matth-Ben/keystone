@@ -88,7 +88,7 @@ export async function createProject(data: {
     const client = await getClient(data.clientId)
 
     // 2. Créer le projet
-    const adminClient = createAdminClient()
+    const adminClient = createAdminClient() as any
 
     const { data: newProject, error } = await adminClient
         .from('projects')
@@ -97,7 +97,7 @@ export async function createProject(data: {
             description: data.description,
             client_id: data.clientId,
             organization_id: client.organization_id,
-        })
+        } as any)
         .select()
         .single()
 
@@ -118,14 +118,14 @@ export async function updateProject(projectId: string, data: {
     const { project } = await checkProjectAccess(projectId)
 
     // 2. Mise à jour
-    const adminClient = createAdminClient()
+    const adminClient = createAdminClient() as any
 
     const { error } = await adminClient
         .from('projects')
         .update({
             name: data.name,
             description: data.description,
-        })
+        } as any)
         .eq('id', projectId)
 
     if (error) {

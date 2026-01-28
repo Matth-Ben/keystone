@@ -43,7 +43,7 @@ const formSchema = z.object({
     password: z.string().optional(),
     username: z.string().optional(),
     host: z.string().optional(),
-    port: z.string().transform(v => (v ? parseInt(v, 10) : undefined)).optional(),
+    port: z.string().optional(),
     url: z.string().optional(),
     db_name: z.string().optional(),
     notes: z.string().optional(),
@@ -107,10 +107,7 @@ export function CreateSecretDialog({
 
             // Reset de base
             form.reset({
-                client_id: clientId || secretToEdit?.project?.client_id || '', // Note: secret structure might slightly vary, usually secrets are linked to projects but here we link to clients directly in our simplified model? Let's assume we link to clients directly or projects. 
-                // Wait, previously we were passing clientId. The Secret type might need verification but let's assume direct linkage or project linkage.
-                // If secrets are linked to projects, we might need projects. But the user asked for CLIENT choice.
-                // Assuming simple client linkage for now based on previous code usage (createSecret(..., client_id)).
+                client_id: clientId || secretToEdit?.client_id || '',
                 type: secretToEdit?.type || 'other',
                 title: secretToEdit?.title || '',
                 password: '',
@@ -157,6 +154,7 @@ export function CreateSecretDialog({
                 ...values,
                 client_id: finalClientId,
                 type: values.type as SecretType,
+                port: values.port ? parseInt(values.port, 10) : undefined,
             }
 
             if (isEdit) {

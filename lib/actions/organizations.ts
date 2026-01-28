@@ -21,7 +21,9 @@ export async function getUserOrganizations() {
             organizations (
                 id,
                 name,
-                slug
+                slug,
+                logo_url,
+                brand_color
             )
         `)
         .eq('user_id', user.id)
@@ -36,6 +38,8 @@ export async function getUserOrganizations() {
         id: membership.organizations.id,
         name: membership.organizations.name,
         slug: membership.organizations.slug,
+        logo_url: membership.organizations.logo_url,
+        brand_color: membership.organizations.brand_color,
         role: membership.role,
     })) || []
 
@@ -68,7 +72,7 @@ export async function createOrganization(name: string) {
             name,
             slug,
             owner_id: user.id,
-        })
+        } as any)
         .select()
         .single()
 
@@ -81,10 +85,10 @@ export async function createOrganization(name: string) {
     const { error: memberError } = await supabase
         .from('organization_members')
         .insert({
-            organization_id: organization.id,
+            organization_id: (organization as any).id,
             user_id: user.id,
             role: 'admin',
-        })
+        } as any)
 
     if (memberError) {
         // Ignorer l'erreur si l'utilisateur est déjà membre (code 23505)
@@ -99,9 +103,9 @@ export async function createOrganization(name: string) {
 
     // ... (existing code for createOrganization)
     return {
-        id: organization.id,
-        name: organization.name,
-        slug: organization.slug,
+        id: (organization as any).id,
+        name: (organization as any).name,
+        slug: (organization as any).slug,
         role: 'admin' as const,
     }
 }
@@ -111,6 +115,7 @@ export interface OrganizationDetails {
     name: string
     slug: string
     logo_url?: string | null
+    brand_color?: string | null
     description?: string | null
     links?: { label: string; url: string }[] | null
 }
@@ -120,7 +125,7 @@ export async function getOrganization(organizationId: string): Promise<Organizat
 
     const { data, error } = await supabase
         .from('organizations')
-        .select('id, name, slug, logo_url, description, links')
+        .select('id, name, slug, logo_url, brand_color, description, links')
         .eq('id', organizationId)
         .single()
 
@@ -141,6 +146,7 @@ export async function updateOrganization(
     data: {
         name: string
         logo_url?: string
+        brand_color?: string
         description?: string
         links?: { label: string; url: string }[]
     }
@@ -152,19 +158,23 @@ export async function updateOrganization(
     // Vérifier les droits (RLS devrait gérer, mais on peut vérifier membership admin ici si besoin)
     // Pour l'instant on fait confiance aux policies Supabase + vérif auth
 
-    const { error } = await supabase
-        .from('organizations')
+    const { error, data: updateData } = await (supabase
+        .from('organizations') as any)
         .update({
             name: data.name,
             logo_url: data.logo_url,
+            brand_color: data.brand_color,
             description: data.description,
             links: data.links,
-        })
+        } as any)
         .eq('id', organizationId)
+        .select()
+
+    console.log('Update result:', { error, updateData })
 
     if (error) {
-        console.error('Error updating organization:', error)
-        throw new Error("Erreur lors de la mise à jour de l'organisation")
+        console.error('Supabase error details:', JSON.stringify(error, null, 2))
+        throw new Error(`Erreur lors de la mise à jour: ${error.message}`)
     }
 
     revalidatePath('/organization')

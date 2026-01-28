@@ -8,6 +8,7 @@ import { ClientActions } from '@/components/clients/client-actions'
 import { RecentTracker } from '@/components/dashboard/recent-tracker'
 import { Globe } from 'lucide-react'
 import { SecretList } from '@/components/secrets/secret-list'
+import { ClientInfoTab } from '@/components/clients/client-info-tab'
 import { notFound } from 'next/navigation'
 
 interface PageProps {
@@ -74,19 +75,17 @@ export default async function ClientPage({ params }: PageProps) {
                 </div>
             </div>
 
-            {/* Description */}
-            {client.description && (
-                <div className="rounded-lg border bg-card p-4 text-sm text-muted-foreground">
-                    {client.description}
-                </div>
-            )}
-
             {/* Tabs */}
-            <Tabs defaultValue="secrets" className="space-y-4">
+            <Tabs defaultValue="infos" className="space-y-4">
                 <TabsList>
+                    <TabsTrigger value="infos">Infos</TabsTrigger>
                     <TabsTrigger value="secrets">Secrets</TabsTrigger>
                     <TabsTrigger value="settings">Paramètres</TabsTrigger>
                 </TabsList>
+
+                <TabsContent value="infos">
+                    <ClientInfoTab client={client} />
+                </TabsContent>
 
                 <TabsContent value="secrets">
                     <SecretList secrets={secrets} clientId={client.id} />
@@ -101,3 +100,4 @@ export default async function ClientPage({ params }: PageProps) {
         </div>
     )
 }
+

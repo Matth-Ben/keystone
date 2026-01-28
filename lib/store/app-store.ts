@@ -5,6 +5,8 @@ interface Organization {
     id: string
     name: string
     slug: string
+    logo_url?: string | null
+    brand_color?: string | null
     role: 'admin' | 'member' | 'restricted'
 }
 
@@ -20,6 +22,13 @@ interface Recent {
     id: string
     name: string
     timestamp: number
+}
+
+interface UserProfile {
+    id: string
+    email: string
+    full_name: string | null
+    avatar_url: string | null
 }
 
 interface AppStore {
@@ -42,6 +51,10 @@ interface AppStore {
     sidebarOpen: boolean
     setSidebarOpen: (open: boolean) => void
     toggleSidebar: () => void
+
+    // User Profile
+    userProfile: UserProfile | null
+    setUserProfile: (profile: UserProfile | null) => void
 }
 
 export const useAppStore = create<AppStore>()(
@@ -82,15 +95,20 @@ export const useAppStore = create<AppStore>()(
             sidebarOpen: false,
             setSidebarOpen: (open) => set({ sidebarOpen: open }),
             toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
+
+            // User Profile
+            userProfile: null,
+            setUserProfile: (profile) => set({ userProfile: profile }),
         }),
         {
             name: 'keystone-app-storage',
             partialize: (state) => ({
                 currentOrganization: state.currentOrganization,
                 recents: state.recents,
+                userProfile: state.userProfile,
             }),
         }
     )
 )
 
-export type { Organization, Favorite, Recent }
+export type { Organization, Favorite, Recent, UserProfile }

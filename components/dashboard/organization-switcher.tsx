@@ -137,8 +137,25 @@ export function OrganizationSwitcher({
                         className="w-full justify-between"
                     >
                         <div className="flex items-center gap-2 truncate">
-                            <div className="flex h-6 w-6 items-center justify-center rounded bg-primary text-xs font-semibold text-primary-foreground">
-                                {currentOrganization?.name.charAt(0).toUpperCase()}
+                            <div
+                                className="flex h-6 w-6 items-center justify-center rounded text-xs font-semibold overflow-hidden relative"
+                                style={{
+                                    backgroundColor: currentOrganization?.brand_color || 'hsl(var(--primary))',
+                                    color: currentOrganization?.brand_color ? '#fff' : 'hsl(var(--primary-foreground))'
+                                }}
+                            >
+                                {currentOrganization?.logo_url ? (
+                                    <>
+                                        <div className="absolute inset-0 bg-white/90 rounded" />
+                                        <img
+                                            src={currentOrganization.logo_url}
+                                            alt={currentOrganization.name}
+                                            className="h-full w-full object-contain p-1 relative z-10"
+                                        />
+                                    </>
+                                ) : (
+                                    currentOrganization?.name.charAt(0).toUpperCase()
+                                )}
                             </div>
                             <span className="truncate">{currentOrganization?.name || 'Sélectionner...'}</span>
                         </div>
@@ -163,6 +180,26 @@ export function OrganizationSwitcher({
                                                 : 'opacity-0'
                                                 }`}
                                         />
+                                        <div
+                                            className="flex h-5 w-5 items-center justify-center rounded text-xs font-semibold overflow-hidden mr-2 relative"
+                                            style={{
+                                                backgroundColor: org.brand_color || 'hsl(var(--primary))',
+                                                color: org.brand_color ? '#fff' : 'hsl(var(--primary-foreground))'
+                                            }}
+                                        >
+                                            {org.logo_url ? (
+                                                <>
+                                                    <div className="absolute inset-0 bg-white/90 rounded" />
+                                                    <img
+                                                        src={org.logo_url}
+                                                        alt={org.name}
+                                                        className="h-full w-full object-contain relative z-10"
+                                                    />
+                                                </>
+                                            ) : (
+                                                org.name.charAt(0).toUpperCase()
+                                            )}
+                                        </div>
                                         <div className="flex flex-1 items-center justify-between">
                                             <span>{org.name}</span>
                                             <span className="text-xs text-muted-foreground capitalize">
