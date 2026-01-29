@@ -8,6 +8,7 @@ import { useAppStore } from '@/lib/store/app-store'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { Favorite, Organization } from '@/lib/store/app-store'
 import { DashboardInitializer } from '@/components/dashboard/dashboard-initializer'
+import { OrganizationSelectionModal } from '@/components/dashboard/organization-selection-modal'
 
 interface DashboardShellProps {
     children: React.ReactNode
@@ -20,9 +21,18 @@ export function DashboardShell({ children, favorites, organizations, currentOrgI
     const [searchOpen, setSearchOpen] = useState(false)
     const { sidebarOpen, setSidebarOpen } = useAppStore()
 
+    // Show modal if we have organizations but no currentOrgId selected
+    const showOrgSelection = !currentOrgId && organizations.length > 0
+
     return (
         <div className="flex h-screen overflow-hidden bg-background">
             <DashboardInitializer />
+
+            <OrganizationSelectionModal
+                organizations={organizations}
+                isOpen={showOrgSelection}
+            />
+
             {/* Desktop Sidebar */}
             <aside className="hidden md:block">
                 <Sidebar favorites={favorites} organizations={organizations} currentOrgId={currentOrgId} />
