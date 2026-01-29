@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
-import { Wand2, Eye, EyeOff, Loader2 } from 'lucide-react'
+import { Wand2, Eye, EyeOff, Loader2, Plus, Check, ChevronsUpDown } from 'lucide-react'
 import {
     Dialog,
     DialogContent,
@@ -22,6 +22,20 @@ import {
     FormMessage,
 } from '@/components/ui/form'
 import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+    CommandSeparator,
+} from '@/components/ui/command'
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover'
+import {
     Select,
     SelectContent,
     SelectItem,
@@ -35,6 +49,8 @@ import { toast } from 'sonner'
 import { createSecret, updateSecret, revealSecret, Secret, SecretType } from '@/lib/actions/secrets'
 import { getClients, Client } from '@/lib/actions/clients'
 import { useAppStore } from '@/lib/store/app-store'
+import { CreateClientDialog } from '@/components/clients/create-client-dialog'
+import { cn } from '@/lib/utils'
 
 const formSchema = z.object({
     client_id: z.string().optional(),
@@ -70,6 +86,8 @@ export function CreateSecretDialog({
     const [isLoadingPassword, setIsLoadingPassword] = useState(false)
     const [clients, setClients] = useState<Client[]>([])
     const [loadingClients, setLoadingClients] = useState(false)
+    const [createClientOpen, setCreateClientOpen] = useState(false)
+    const [popoverOpen, setPopoverOpen] = useState(false)
 
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
@@ -88,6 +106,32 @@ export function CreateSecretDialog({
     })
 
     const type = form.watch('type') as SecretType
+
+    const handleClientCreated = (newClient: Client) => {
+        if (newClient) {
+            // Optimistic update : on ajoute tout de suite à la liste pour pouvoir le sélectionner
+            setClients(prev => {
+                // Éviter les doublons si le re-fetch est rapide ou si déjà présent
+                if (prev.find(c => c.id === newClient.id)) return prev
+                return [...prev, newClient].sort((a, b) => a.name.localeCompare(b.name))
+            })
+
+            // On sélectionne le nouveau client
+            form.setValue('client_id', newClient.id, {
+                shouldValidate: true,
+                shouldDirty: true,
+                shouldTouch: true
+            })
+        }
+
+        // Background refresh pour être sûr de la synchro
+        if (currentOrganization) {
+            // On ne met pas loadingClients à true pour éviter le flash de chargement qui cacherait la sélection
+            getClients(currentOrganization.id)
+                .then(setClients)
+                .catch(() => toast.error("Erreur lors de la mise à jour de la liste des clients"))
+        }
+    }
 
     // Charger les clients si aucun clientId n'est fourni
     useEffect(() => {
@@ -199,28 +243,95 @@ export function CreateSecretDialog({
 
                         {/* Sélection du client si non fourni */}
                         {!clientId && (
-                            <FormField
-                                control={form.control}
-                                name="client_id"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Client</FormLabel>
-                                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                            <FormControl>
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder={loadingClients ? "Chargement..." : "Sélectionner un client"} />
-                                                </SelectTrigger>
-                                            </FormControl>
-                                            <SelectContent>
-                                                {clients.map(client => (
-                                                    <SelectItem key={client.id} value={client.id}>{client.name}</SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
+                            <div className="space-y-2">
+                                <FormField
+                                    control={form.control}
+                                    name="client_id"
+                                    render={({ field }) => (
+                                        <FormItem className="flex flex-col">
+                                            <FormLabel>Client</FormLabel>
+                                            <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+                                                <PopoverTrigger asChild>
+                                                    <FormControl>
+                                                        <Button
+                                                            variant="outline"
+                                                            role="combobox"
+                                                            aria-expanded={popoverOpen}
+                                                            className={cn(
+                                                                "w-full justify-between",
+                                                                !field.value && "text-muted-foreground"
+                                                            )}
+                                                        >
+                                                            {field.value
+                                                                ? clients.find(client => client.id === field.value)?.name
+                                                                : "Sélectionner un client"}
+                                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                                        </Button>
+                                                    </FormControl>
+                                                </PopoverTrigger>
+                                                <PopoverContent className="w-[400px] p-0" align="start">
+                                                    <Command>
+                                                        <CommandInput placeholder="Rechercher un client..." />
+                                                        <CommandList>
+                                                            <CommandEmpty>Aucun client trouvé.</CommandEmpty>
+                                                            <CommandGroup>
+                                                                {clients.map((client) => (
+                                                                    <CommandItem
+                                                                        value={client.name}
+                                                                        key={client.id}
+                                                                        onSelect={() => {
+                                                                            form.setValue("client_id", client.id)
+                                                                            setPopoverOpen(false)
+                                                                        }}
+                                                                        className="cursor-pointer"
+                                                                    >
+                                                                        <Check
+                                                                            className={cn(
+                                                                                "mr-2 h-4 w-4",
+                                                                                client.id === field.value
+                                                                                    ? "opacity-100"
+                                                                                    : "opacity-0"
+                                                                            )}
+                                                                        />
+                                                                        <div className="flex items-center gap-2">
+                                                                            <div className="flex h-5 w-5 items-center justify-center rounded bg-primary/10 text-xs font-semibold overflow-hidden">
+                                                                                {client.logo ? (
+                                                                                    <img
+                                                                                        src={client.logo}
+                                                                                        alt={client.name}
+                                                                                        className="h-full w-full object-cover"
+                                                                                    />
+                                                                                ) : (
+                                                                                    client.name.charAt(0).toUpperCase()
+                                                                                )}
+                                                                            </div>
+                                                                            <span>{client.name}</span>
+                                                                        </div>
+                                                                    </CommandItem>
+                                                                ))}
+                                                            </CommandGroup>
+                                                            <CommandSeparator />
+                                                            <CommandGroup>
+                                                                <CommandItem
+                                                                    onSelect={() => {
+                                                                        setPopoverOpen(false)
+                                                                        setCreateClientOpen(true)
+                                                                    }}
+                                                                    className="cursor-pointer"
+                                                                >
+                                                                    <Plus className="mr-2 h-4 w-4" />
+                                                                    Créer un nouveau client
+                                                                </CommandItem>
+                                                            </CommandGroup>
+                                                        </CommandList>
+                                                    </Command>
+                                                </PopoverContent>
+                                            </Popover>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                            </div>
                         )}
 
                         <div className="grid grid-cols-2 gap-4">
@@ -427,6 +538,12 @@ export function CreateSecretDialog({
                         </DialogFooter>
                     </form>
                 </Form>
+
+                <CreateClientDialog
+                    open={createClientOpen}
+                    onOpenChange={setCreateClientOpen}
+                    onClientCreated={handleClientCreated}
+                />
             </DialogContent>
         </Dialog>
     )

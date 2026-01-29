@@ -44,7 +44,7 @@ const formSchema = z.object({
 interface CreateClientDialogProps {
     open?: boolean
     onOpenChange?: (open: boolean) => void
-    onClientCreated?: () => void
+    onClientCreated?: (client: Client) => void
     clientToEdit?: Client
 }
 
@@ -87,16 +87,23 @@ export function CreateClientDialog({
         if (!currentOrganization && !clientToEdit) return
 
         try {
+            let result: Client
+
             if (clientToEdit) {
+                // Note: updateClient returns { success: true } currently, we might need to fetch or adjust if we want the full object,
+                // but for "Edit" usually we don't switch selection.
+                // However user request is about "Creation".
+                // Let's check createClient return type. It returns 'newClient as Client'.
                 await updateClient(clientToEdit.id, {
                     name: values.name,
                     website: values.website || undefined,
                     description: values.description || undefined,
                     drive_folder_url: values.drive_folder_url || undefined,
                 })
+                result = { ...clientToEdit, ...values } as Client // Emulation for edit
                 toast.success('Client modifié avec succès')
             } else {
-                await createClient({
+                result = await createClient({
                     name: values.name,
                     website: values.website || undefined,
                     description: values.description || undefined,
@@ -107,7 +114,7 @@ export function CreateClientDialog({
 
             onOpenChange?.(false)
             form.reset()
-            onClientCreated?.()
+            onClientCreated?.(result)
         } catch (error: any) {
             toast.error('Erreur', {
                 description: error.message || 'Une erreur est survenue',

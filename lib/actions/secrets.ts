@@ -80,6 +80,29 @@ export async function getSecrets(clientId: string): Promise<Secret[]> {
     return data as Secret[]
 }
 
+export async function getSecretDetails(secretId: string): Promise<Secret> {
+    const supabase = await createClient() as any
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('Non authentifié')
+
+    const { data, error } = await supabase
+        .from('secrets')
+        .select('*')
+        .eq('id', secretId)
+        .single()
+
+    if (error || !data) {
+        throw new Error('Secret introuvable')
+    }
+
+    // Vérification basique des droits: le secret doit appartenir à une organisation dont l'user est membre.
+    // Mais ici on fait confiance à la policy RLS 'view_secrets' qui devrait gérer ça via la chaine project->client->org->member.
+    // Ou directement via client_id.
+
+    return data as Secret
+}
+
 export async function createSecret(data: SecretFormData) {
     const supabase = await createClient() as any
     const { data: { user } } = await supabase.auth.getUser()
