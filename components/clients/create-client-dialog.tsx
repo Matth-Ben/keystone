@@ -35,6 +35,10 @@ const formSchema = z.object({
     }),
     website: z.string().url({ message: 'URL invalide' }).optional().or(z.literal('')),
     description: z.string().optional(),
+    drive_folder_url: z.string().optional().refine((val) => {
+        if (!val) return true;
+        return /drive\.google\.com\/.*folders\/([a-zA-Z0-9_-]+)/.test(val);
+    }, "L'URL doit être un lien Google Drive valide (ex: https://drive.google.com/drive/folders/XXX)"),
 })
 
 interface CreateClientDialogProps {
@@ -63,6 +67,7 @@ export function CreateClientDialog({
             name: '',
             website: '',
             description: '',
+            drive_folder_url: '',
         },
     })
 
@@ -73,6 +78,7 @@ export function CreateClientDialog({
                 name: clientToEdit?.name || '',
                 website: clientToEdit?.website || '',
                 description: clientToEdit?.description || '',
+                drive_folder_url: clientToEdit?.drive_folder_url || '',
             })
         }
     }, [open, clientToEdit, form])
@@ -86,6 +92,7 @@ export function CreateClientDialog({
                     name: values.name,
                     website: values.website || undefined,
                     description: values.description || undefined,
+                    drive_folder_url: values.drive_folder_url || undefined,
                 })
                 toast.success('Client modifié avec succès')
             } else {
@@ -150,6 +157,19 @@ export function CreateClientDialog({
                                     <FormLabel>Site Web</FormLabel>
                                     <FormControl>
                                         <Input placeholder="https://acme.com" {...field} />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="drive_folder_url"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Dossier Google Drive</FormLabel>
+                                    <FormControl>
+                                        <Input placeholder="https://drive.google.com/..." {...field} />
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>

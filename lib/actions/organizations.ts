@@ -118,6 +118,7 @@ export interface OrganizationDetails {
     brand_color?: string | null
     description?: string | null
     links?: { label: string; url: string }[] | null
+    drive_folder_url?: string | null
 }
 
 export async function getOrganization(organizationId: string): Promise<OrganizationDetails> {
@@ -125,7 +126,7 @@ export async function getOrganization(organizationId: string): Promise<Organizat
 
     const { data, error } = await supabase
         .from('organizations')
-        .select('id, name, slug, logo_url, brand_color, description, links')
+        .select('id, name, slug, logo_url, brand_color, description, links, drive_folder_url')
         .eq('id', organizationId)
         .single()
 
@@ -149,6 +150,7 @@ export async function updateOrganization(
         brand_color?: string
         description?: string
         links?: { label: string; url: string }[]
+        drive_folder_url?: string
     }
 ) {
     const supabase = await createClient()
@@ -166,6 +168,7 @@ export async function updateOrganization(
             brand_color: data.brand_color,
             description: data.description,
             links: data.links,
+            drive_folder_url: data.drive_folder_url,
         } as any)
         .eq('id', organizationId)
         .select()

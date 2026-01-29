@@ -12,6 +12,7 @@ export interface Client {
     organization_id: string
     logo: string | null
     links?: { label: string; url: string }[] | null
+    drive_folder_url?: string | null
     created_at: string
 }
 
@@ -122,6 +123,7 @@ export async function updateClient(clientId: string, data: {
     website?: string
     description?: string
     links?: { label: string; url: string }[]
+    drive_folder_url?: string
 }) {
     // 1. Récupérer le client pour vérifier l'org
     const currentClient = await getClient(clientId) // Vérifie déjà l'accès
@@ -136,6 +138,7 @@ export async function updateClient(clientId: string, data: {
             website: data.website,
             description: data.description,
             links: data.links,
+            drive_folder_url: data.drive_folder_url,
         } as any)
         .eq('id', clientId)
 

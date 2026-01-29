@@ -26,7 +26,11 @@ const formSchema = z.object({
     name: z.string().min(2, 'Le nom doit contenir au moins 2 caractères'),
     logo_url: z.string().optional(),
     brand_color: z.string().optional(),
-    description: z.string().optional()
+    description: z.string().optional(),
+    drive_folder_url: z.string().optional().refine((val) => {
+        if (!val) return true;
+        return /drive\.google\.com\/.*folders\/([a-zA-Z0-9_-]+)/.test(val);
+    }, "L'URL doit être un lien Google Drive valide (ex: https://drive.google.com/drive/folders/XXX)")
 })
 
 interface OrganizationDetailsFormProps {
@@ -42,7 +46,8 @@ export function OrganizationDetailsForm({ organization }: OrganizationDetailsFor
             name: organization.name || '',
             logo_url: organization.logo_url || '',
             brand_color: organization.brand_color || '',
-            description: organization.description || ''
+            description: organization.description || '',
+            drive_folder_url: organization.drive_folder_url || ''
         }
     })
 
@@ -55,7 +60,8 @@ export function OrganizationDetailsForm({ organization }: OrganizationDetailsFor
                 name: values.name,
                 logo_url: values.logo_url || undefined,
                 brand_color: values.brand_color || undefined,
-                description: values.description || undefined
+                description: values.description || undefined,
+                drive_folder_url: values.drive_folder_url || undefined
             }
 
             console.log('Payload to send:', payload)
@@ -128,6 +134,23 @@ export function OrganizationDetailsForm({ organization }: OrganizationDetailsFor
                                         {...field}
                                     />
                                 </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+
+                    <FormField
+                        control={form.control}
+                        name="drive_folder_url"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Recherche Google Drive</FormLabel>
+                                <FormControl>
+                                    <Input placeholder="https://drive.google.com/drive/folders/..." {...field} />
+                                </FormControl>
+                                <FormDescription>
+                                    Collez le lien vers le dossier Google Drive de votre organisation pour l'intégrer dans l'onglet "Documents".
+                                </FormDescription>
                                 <FormMessage />
                             </FormItem>
                         )}

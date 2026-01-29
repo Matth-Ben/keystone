@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Users, Star, Clock, Key, Building2 } from 'lucide-react'
+import { Home, Users, Star, Clock, Key, Building2, FolderOpen } from 'lucide-react'
 import { OrganizationSwitcher } from './organization-switcher'
 import { useAppStore, Favorite } from '@/lib/store/app-store'
 import { cn } from '@/lib/utils'
@@ -12,6 +12,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 const navigation = [
     { name: 'Secrets', href: '/secrets', icon: Key },
     { name: 'Clients', href: '/clients', icon: Users },
+    { name: 'Documents', href: '/documents', icon: FolderOpen },
     { name: 'Organisation', href: '/organization', icon: Building2 },
 ]
 

@@ -9,6 +9,7 @@ import { RecentTracker } from '@/components/dashboard/recent-tracker'
 import { Globe } from 'lucide-react'
 import { SecretList } from '@/components/secrets/secret-list'
 import { ClientInfoTab } from '@/components/clients/client-info-tab'
+import { ClientDocumentsTab } from '@/components/clients/client-documents-tab'
 import { notFound } from 'next/navigation'
 
 interface PageProps {
@@ -80,6 +81,9 @@ export default async function ClientPage({ params }: PageProps) {
                 <TabsList>
                     <TabsTrigger value="infos">Infos</TabsTrigger>
                     <TabsTrigger value="secrets">Secrets</TabsTrigger>
+                    {client.drive_folder_url && (
+                        <TabsTrigger value="documents">Documents</TabsTrigger>
+                    )}
                     <TabsTrigger value="settings">Paramètres</TabsTrigger>
                 </TabsList>
 
@@ -90,6 +94,12 @@ export default async function ClientPage({ params }: PageProps) {
                 <TabsContent value="secrets">
                     <SecretList secrets={secrets} clientId={client.id} />
                 </TabsContent>
+
+                {client.drive_folder_url && (
+                    <TabsContent value="documents">
+                        <ClientDocumentsTab client={client} />
+                    </TabsContent>
+                )}
 
                 <TabsContent value="settings">
                     <div className="flex h-[200px] flex-col items-center justify-center gap-2 rounded-lg border border-dashed text-center text-muted-foreground">

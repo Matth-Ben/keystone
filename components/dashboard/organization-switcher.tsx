@@ -40,6 +40,11 @@ export function OrganizationSwitcher({
     const { currentOrganization, setCurrentOrganization } = useAppStore()
     const router = useRouter()
 
+    // Determine which organization to display:
+    // 1. Store value (if hydrated)
+    // 2. Or value from initial ID (SSR/Server fallback)
+    const displayOrganization = currentOrganization ?? organizations.find(o => o.id === initialOrgId)
+
     useEffect(() => {
         // Hydrater le store si besoin
         if (initialOrgId && !currentOrganization && initialOrganizations.length > 0) {
@@ -140,24 +145,24 @@ export function OrganizationSwitcher({
                             <div
                                 className="flex h-6 w-6 items-center justify-center rounded text-xs font-semibold overflow-hidden relative"
                                 style={{
-                                    backgroundColor: currentOrganization?.brand_color || 'hsl(var(--primary))',
-                                    color: currentOrganization?.brand_color ? '#fff' : 'hsl(var(--primary-foreground))'
+                                    backgroundColor: displayOrganization?.brand_color || 'hsl(var(--primary))',
+                                    color: displayOrganization?.brand_color ? '#fff' : 'hsl(var(--primary-foreground))'
                                 }}
                             >
-                                {currentOrganization?.logo_url ? (
+                                {displayOrganization?.logo_url ? (
                                     <>
                                         <div className="absolute inset-0 bg-white/90 rounded" />
                                         <img
-                                            src={currentOrganization.logo_url}
-                                            alt={currentOrganization.name}
+                                            src={displayOrganization.logo_url}
+                                            alt={displayOrganization.name}
                                             className="h-full w-full object-contain p-1 relative z-10"
                                         />
                                     </>
                                 ) : (
-                                    currentOrganization?.name.charAt(0).toUpperCase()
+                                    displayOrganization?.name.charAt(0).toUpperCase()
                                 )}
                             </div>
-                            <span className="truncate">{currentOrganization?.name || 'Sélectionner...'}</span>
+                            <span className="truncate">{displayOrganization?.name || 'Sélectionner...'}</span>
                         </div>
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
