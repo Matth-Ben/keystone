@@ -24,6 +24,29 @@ export function DashboardShell({ children, favorites, organizations, currentOrgI
     // Show modal if we have organizations but no currentOrgId selected
     const showOrgSelection = !currentOrgId && organizations.length > 0
 
+    // Validation du cookie côté client
+    const { setCurrentOrganization } = useAppStore()
+
+    // Si l'ID courant n'est pas dans la liste des organisations valides, on corrige
+    if (currentOrgId && organizations.length > 0) {
+        const isValid = organizations.some(o => o.id === currentOrgId)
+        if (!isValid) {
+            console.warn('Invalid Organization ID detected, correcting...')
+            // On prend la première organisation valide
+            const validOrg = organizations[0]
+            // On le set via server action puis reload
+            import('@/lib/actions/organization-cookie')
+                .then(mod => mod.setOrganizationCookie(validOrg.id))
+                .then(() => {
+                    // Force a hard reload to ensure server components re-render with new cookie
+                    window.location.reload()
+                })
+
+            // On ne rend rien ou un loader en attendant le reload
+            return <div className="flex h-screen items-center justify-center">Redirection...</div>
+        }
+    }
+
     return (
         <div className="flex h-screen overflow-hidden bg-background">
             <DashboardInitializer />
