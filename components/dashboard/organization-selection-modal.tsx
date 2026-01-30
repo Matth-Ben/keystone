@@ -40,7 +40,7 @@ export function OrganizationSelectionModal({
 
     return (
         <Dialog open={isOpen}>
-            <DialogContent className="sm:max-w-md" hideCloseButton>
+            <DialogContent className="sm:max-w-md" showCloseButton={false}>
                 <DialogHeader>
                     <DialogTitle>Sélectionnez une organisation</DialogTitle>
                     <DialogDescription>
@@ -52,7 +52,7 @@ export function OrganizationSelectionModal({
                         <Button
                             key={org.id}
                             variant="outline"
-                            className="h-auto flex-col items-start gap-1 p-4 hover:bg-accent test-org-selection-btn"
+                            className="h-auto flex-col items-start gap-1 p-4 hover:bg-accent"
                             onClick={() => handleSelect(org.id)}
                             disabled={isLoading}
                         >

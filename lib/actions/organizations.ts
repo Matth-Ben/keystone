@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { revalidatePath } from 'next/cache'
 
 export async function getUserOrganizations() {
     const supabase = await createClient()
@@ -102,6 +103,7 @@ export async function createOrganization(name: string) {
     }
 
     // ... (existing code for createOrganization)
+    revalidatePath('/', 'layout')
     return {
         id: (organization as any).id,
         name: (organization as any).name,
@@ -138,7 +140,7 @@ export async function getOrganization(organizationId: string): Promise<Organizat
     return data
 }
 
-import { revalidatePath } from 'next/cache'
+
 
 // ...
 

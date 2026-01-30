@@ -2,6 +2,7 @@ import { getFavorites } from '@/lib/actions/favorites'
 import { getUserOrganizations } from '@/lib/actions/organizations'
 import { getOrganizationCookie } from '@/lib/actions/organization-cookie'
 import { DashboardShell } from '@/components/dashboard/dashboard-shell'
+import { redirect } from 'next/navigation'
 
 export default async function DashboardLayout({
     children,
@@ -14,6 +15,10 @@ export default async function DashboardLayout({
         getUserOrganizations(),
         getOrganizationCookie(),
     ])
+
+    if (organizations.length === 0) {
+        redirect('/onboarding')
+    }
 
     // Convertir les favoris au format du store/interface de la sidebar
     const favorites = rawFavorites.map(f => ({

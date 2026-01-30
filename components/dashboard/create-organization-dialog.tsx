@@ -40,12 +40,14 @@ interface CreateOrganizationDialogProps {
     open: boolean
     onOpenChange: (open: boolean) => void
     onSuccess?: () => void
+    showCancel?: boolean
 }
 
 export function CreateOrganizationDialog({
     open,
     onOpenChange,
     onSuccess,
+    showCancel = true,
 }: CreateOrganizationDialogProps) {
     const [loading, setLoading] = useState(false)
     const { setCurrentOrganization } = useAppStore()
@@ -93,7 +95,7 @@ export function CreateOrganizationDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[425px]">
+            <DialogContent className="sm:max-w-[425px]" showCloseButton={showCancel}>
                 <DialogHeader>
                     <DialogTitle>Créer une organisation</DialogTitle>
                     <DialogDescription>
@@ -123,14 +125,16 @@ export function CreateOrganizationDialog({
                             )}
                         />
                         <DialogFooter>
-                            <Button
-                                type="button"
-                                variant="outline"
-                                onClick={() => onOpenChange(false)}
-                                disabled={loading}
-                            >
-                                Annuler
-                            </Button>
+                            {showCancel && (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => onOpenChange(false)}
+                                    disabled={loading}
+                                >
+                                    Annuler
+                                </Button>
+                            )}
                             <Button type="submit" disabled={loading}>
                                 {loading ? 'Création...' : 'Créer'}
                             </Button>
