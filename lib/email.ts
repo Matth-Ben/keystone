@@ -1,33 +1,35 @@
-import { Resend } from 'resend'
+import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+const resend = new Resend(process.env.RESEND_API_KEY);
 
-const FROM = process.env.RESEND_FROM_EMAIL ?? 'Keystone <noreply@resend.dev>'
+const FROM =
+  process.env.RESEND_FROM_EMAIL ??
+  "Keystone <no-reply@keystone.matthiasbenoit.fr>";
 
 const ROLE_LABELS: Record<string, string> = {
-    admin: 'Admin',
-    member: 'Éditeur',
-    restricted: 'Lecteur',
-}
+  admin: "Admin",
+  member: "Éditeur",
+  restricted: "Lecteur",
+};
 
 export async function sendInvitationEmail({
-    to,
-    orgName,
-    role,
-    inviteUrl,
+  to,
+  orgName,
+  role,
+  inviteUrl,
 }: {
-    to: string
-    orgName: string
-    role: string
-    inviteUrl: string
+  to: string;
+  orgName: string;
+  role: string;
+  inviteUrl: string;
 }) {
-    const roleLabel = ROLE_LABELS[role] ?? role
+  const roleLabel = ROLE_LABELS[role] ?? role;
 
-    const { error } = await resend.emails.send({
-        from: FROM,
-        to,
-        subject: `Vous avez été invité à rejoindre ${orgName} sur Keystone`,
-        html: `
+  const { error } = await resend.emails.send({
+    from: FROM,
+    to,
+    subject: `Vous avez été invité à rejoindre ${orgName} sur Keystone`,
+    html: `
 <!DOCTYPE html>
 <html lang="fr">
 <head><meta charset="UTF-8" /></head>
@@ -56,10 +58,10 @@ export async function sendInvitationEmail({
   </div>
 </body>
 </html>`,
-    })
+  });
 
-    if (error) {
-        console.error('Error sending invitation email:', error)
-        throw new Error('Erreur lors de l\'envoi de l\'email d\'invitation')
-    }
+  if (error) {
+    console.error("Error sending invitation email:", error);
+    throw new Error("Erreur lors de l'envoi de l'email d'invitation");
+  }
 }
