@@ -38,7 +38,7 @@ export async function updateSession(request: NextRequest) {
     // Protection des routes
     const isAuthRoute = request.nextUrl.pathname.startsWith('/login') ||
         request.nextUrl.pathname.startsWith('/register') ||
-        request.nextUrl.pathname.startsWith('/reset-password')
+        request.nextUrl.pathname === '/reset-password'
 
     const isDashboardRoute = request.nextUrl.pathname.startsWith('/clients') ||
         request.nextUrl.pathname.startsWith('/settings')
