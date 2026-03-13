@@ -21,7 +21,7 @@ export async function requireOrgRole(
         .select('role')
         .eq('organization_id', orgId)
         .eq('user_id', user.id)
-        .maybeSingle()
+        .maybeSingle() as { data: { role: string } | null, error: unknown }
 
     if (!membership) throw new Error('Accès refusé à cette organisation')
 
