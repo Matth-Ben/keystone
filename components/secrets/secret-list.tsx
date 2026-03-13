@@ -37,9 +37,12 @@ import { cn } from '@/lib/utils'
 import { formatDistanceToNow } from 'date-fns'
 import { fr } from 'date-fns/locale'
 
+import type { OrgRole } from '@/lib/rbac'
+
 interface SecretListProps {
     secrets: (Secret & { clients?: { name: string } | null })[]
     clientId?: string
+    role?: OrgRole
 }
 
 export const TYPE_ICONS: Record<SecretType, any> = {
@@ -91,7 +94,9 @@ function CopyableText({ text, label, className, icon }: { text: string, label: s
     )
 }
 
-export function SecretList({ secrets, clientId }: SecretListProps) {
+export function SecretList({ secrets, clientId, role = 'restricted' }: SecretListProps) {
+    const canWrite = role !== 'restricted'
+    const canDelete = role === 'admin'
     const [search, setSearch] = useState('')
     const [isCreateOpen, setIsCreateOpen] = useState(false)
     const [secretToEdit, setSecretToEdit] = useState<Secret | undefined>(undefined)
@@ -143,13 +148,15 @@ export function SecretList({ secrets, clientId }: SecretListProps) {
                         onChange={(e) => setSearch(e.target.value)}
                     />
                 </div>
-                <Button onClick={() => {
-                    setSecretToEdit(undefined)
-                    setIsCreateOpen(true)
-                }} size="sm" className="w-full sm:w-auto gap-1.5">
-                    <Plus className="h-4 w-4" />
-                    Nouveau Secret
-                </Button>
+                {canWrite && (
+                    <Button onClick={() => {
+                        setSecretToEdit(undefined)
+                        setIsCreateOpen(true)
+                    }} size="sm" className="w-full sm:w-auto gap-1.5">
+                        <Plus className="h-4 w-4" />
+                        Nouveau Secret
+                    </Button>
+                )}
             </div>
 
             {filteredSecrets.length === 0 ? (
@@ -161,7 +168,7 @@ export function SecretList({ secrets, clientId }: SecretListProps) {
                     <p className="text-muted-foreground text-sm max-w-sm mt-2">
                         {search ? "Essayez de modifier votre recherche." : "Commencez par ajouter votre premier secret sécurisé."}
                     </p>
-                    {!search && (
+                    {!search && canWrite && (
                         <Button variant="outline" className="mt-4" onClick={() => setIsCreateOpen(true)}>
                             Créer un secret
                         </Button>
@@ -193,29 +200,35 @@ export function SecretList({ secrets, clientId }: SecretListProps) {
                                                 </Badge>
                                             </div>
                                         </div>
-                                        <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" size="icon" className="-mr-2 h-8 w-8 text-muted-foreground">
-                                                    <MoreHorizontal className="h-4 w-4" />
-                                                </Button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end">
-                                                <DropdownMenuItem onClick={() => {
-                                                    setSecretToEdit(secret)
-                                                    setIsCreateOpen(true)
-                                                }}>
-                                                    <Edit className="mr-2 h-4 w-4" />
-                                                    Modifier
-                                                </DropdownMenuItem>
-                                                <DropdownMenuItem
-                                                    className="text-destructive focus:text-destructive"
-                                                    onClick={() => setSecretToDelete(secret)}
-                                                >
-                                                    <Trash2 className="mr-2 h-4 w-4" />
-                                                    Supprimer
-                                                </DropdownMenuItem>
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
+                                        {(canWrite || canDelete) && (
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" size="icon" className="-mr-2 h-8 w-8 text-muted-foreground">
+                                                        <MoreHorizontal className="h-4 w-4" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    {canWrite && (
+                                                        <DropdownMenuItem onClick={() => {
+                                                            setSecretToEdit(secret)
+                                                            setIsCreateOpen(true)
+                                                        }}>
+                                                            <Edit className="mr-2 h-4 w-4" />
+                                                            Modifier
+                                                        </DropdownMenuItem>
+                                                    )}
+                                                    {canDelete && (
+                                                        <DropdownMenuItem
+                                                            className="text-destructive focus:text-destructive"
+                                                            onClick={() => setSecretToDelete(secret)}
+                                                        >
+                                                            <Trash2 className="mr-2 h-4 w-4" />
+                                                            Supprimer
+                                                        </DropdownMenuItem>
+                                                    )}
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        )}
                                     </div>
                                 </CardHeader>
 

@@ -1,8 +1,8 @@
 'use server'
 
-import { createClient as createSupabaseClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
+import { requireOrgRole, assertCanWrite, assertCanDelete } from '@/lib/rbac'
 
 export interface Client {
     id: string
@@ -16,32 +16,9 @@ export interface Client {
     created_at: string
 }
 
-async function checkOrganizationAccess(organizationId: string) {
-    const supabase = await createSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-        throw new Error('Non authentifié')
-    }
-
-    // Vérifier l'appartenance via la politique "view_own_membership" (RLS standard)
-    const { data: membership } = await supabase
-        .from('organization_members')
-        .select('role')
-        .eq('organization_id', organizationId)
-        .eq('user_id', user.id)
-        .maybeSingle()
-
-    if (!membership) {
-        throw new Error('Accès refusé à cette organisation')
-    }
-
-    return user
-}
-
 export async function getClients(organizationId: string, query?: string) {
-    // 1. Vérification sécurité
-    await checkOrganizationAccess(organizationId)
+    // 1. Vérification sécurité (tous les rôles peuvent lire)
+    await requireOrgRole(organizationId)
 
     // 2. Récupération données (Admin Client pour contourner RLS complexes sur clients)
     const adminClient = createAdminClient()
@@ -80,8 +57,8 @@ export async function getClient(clientId: string) {
         throw new Error('Client non trouvé')
     }
 
-    // On vérifie l'accès à l'organisation du client
-    await checkOrganizationAccess(client.organization_id)
+    // On vérifie l'accès à l'organisation du client (tous les rôles peuvent lire)
+    await requireOrgRole(client.organization_id)
 
     return client as Client
 }
@@ -92,8 +69,9 @@ export async function createClient(data: {
     description?: string
     organizationId: string
 }) {
-    // 1. Vérification sécurité
-    await checkOrganizationAccess(data.organizationId)
+    // 1. Vérification sécurité + permission écriture
+    const { role } = await requireOrgRole(data.organizationId)
+    assertCanWrite(role)
 
     // 2. Création (Admin Client)
     const adminClient = createAdminClient() as any
@@ -125,8 +103,10 @@ export async function updateClient(clientId: string, data: {
     links?: { label: string; url: string }[]
     drive_folder_url?: string
 }) {
-    // 1. Récupérer le client pour vérifier l'org
-    const currentClient = await getClient(clientId) // Vérifie déjà l'accès
+    // 1. Récupérer le client pour connaître l'org, puis vérifier le rôle
+    const currentClient = await getClient(clientId)
+    const { role } = await requireOrgRole(currentClient.organization_id)
+    assertCanWrite(role)
 
     // 2. Mise à jour
     const adminClient = createAdminClient() as any
@@ -153,8 +133,10 @@ export async function updateClient(clientId: string, data: {
 }
 
 export async function deleteClient(clientId: string) {
-    // 1. Récupérer le client pour vérifier l'org
+    // 1. Récupérer le client pour connaître l'org, puis vérifier le rôle admin
     const currentClient = await getClient(clientId)
+    const { role } = await requireOrgRole(currentClient.organization_id)
+    assertCanDelete(role)
 
     // 2. Suppression
     const adminClient = createAdminClient()

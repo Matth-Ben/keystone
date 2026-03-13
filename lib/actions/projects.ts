@@ -1,9 +1,9 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { getClient } from './clients'
+import { requireOrgRole, assertCanWrite, assertCanDelete } from '@/lib/rbac'
 
 export interface Project {
     id: string
@@ -14,11 +14,10 @@ export interface Project {
     created_at: string
 }
 
-// Fonction de base pour vérifier l'accès à un projet
+// Vérifie l'accès à un projet et retourne le projet + le rôle de l'utilisateur
 async function checkProjectAccess(projectId: string) {
     const adminClient = createAdminClient()
 
-    // Récupérer le projet pour connaître l'organisation
     const { data: project, error } = await adminClient
         .from('projects')
         .select('*')
@@ -29,28 +28,9 @@ async function checkProjectAccess(projectId: string) {
         throw new Error('Projet non trouvé')
     }
 
-    // Vérifier l'accès à l'organisation via le client standard
-    // On réutilise la logique de getClient qui sait vérifier l'accès
-    // Mais ici on doit vérifier manuellement l'organisation du projet
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const { userId, role } = await requireOrgRole(project.organization_id)
 
-    if (!user) {
-        throw new Error('Non authentifié')
-    }
-
-    const { data: membership } = await supabase
-        .from('organization_members')
-        .select('role')
-        .eq('organization_id', project.organization_id)
-        .eq('user_id', user.id)
-        .maybeSingle()
-
-    if (!membership) {
-        throw new Error('Accès refusé à ce projet')
-    }
-
-    return { user, project }
+    return { userId, role, project }
 }
 
 export async function getProjects(clientId: string) {
@@ -84,8 +64,10 @@ export async function createProject(data: {
     description?: string
     clientId: string
 }) {
-    // 1. Vérifier l'accès au client et récupérer son org_id
+    // 1. Vérifier l'accès + permission écriture
     const client = await getClient(data.clientId)
+    const { role } = await requireOrgRole(client.organization_id)
+    assertCanWrite(role)
 
     // 2. Créer le projet
     const adminClient = createAdminClient() as any
@@ -114,8 +96,9 @@ export async function updateProject(projectId: string, data: {
     name?: string
     description?: string
 }) {
-    // 1. Vérifier l'accès
-    const { project } = await checkProjectAccess(projectId)
+    // 1. Vérifier l'accès + permission écriture
+    const { project, role } = await checkProjectAccess(projectId)
+    assertCanWrite(role)
 
     // 2. Mise à jour
     const adminClient = createAdminClient() as any
@@ -139,8 +122,9 @@ export async function updateProject(projectId: string, data: {
 }
 
 export async function deleteProject(projectId: string) {
-    // 1. Vérifier l'accès
-    const { project } = await checkProjectAccess(projectId)
+    // 1. Vérifier l'accès + permission admin
+    const { project, role } = await checkProjectAccess(projectId)
+    assertCanDelete(role)
 
     // 2. Suppression
     const adminClient = createAdminClient()

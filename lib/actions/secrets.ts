@@ -1,8 +1,10 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { encrypt, decrypt } from '@/lib/vault'
 import { revalidatePath } from 'next/cache'
+import { requireOrgRole, assertCanWrite, assertCanDelete, assertCanRevealSecrets } from '@/lib/rbac'
 
 export type SecretType = 'ssh' | 'ftp' | 'db' | 'cms' | 'api' | 'other'
 
@@ -103,12 +105,39 @@ export async function getSecretDetails(secretId: string): Promise<Secret> {
     return data as Secret
 }
 
+async function getOrgIdFromClient(clientId: string): Promise<string> {
+    const adminClient = createAdminClient() as any
+    const { data, error } = await adminClient
+        .from('clients')
+        .select('organization_id')
+        .eq('id', clientId)
+        .single()
+    if (error || !data) throw new Error('Client introuvable')
+    return data.organization_id
+}
+
+async function getOrgIdFromSecret(secretId: string): Promise<string> {
+    const adminClient = createAdminClient() as any
+    const { data, error } = await adminClient
+        .from('secrets')
+        .select('client_id, clients!inner(organization_id)')
+        .eq('id', secretId)
+        .single()
+    if (error || !data) throw new Error('Secret introuvable')
+    return (data.clients as any).organization_id
+}
+
 export async function createSecret(data: SecretFormData) {
     const supabase = await createClient() as any
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) throw new Error('Non authentifié')
     if (!data.password) throw new Error('Le mot de passe/clé est requis')
+
+    // Vérification du rôle
+    const orgId = await getOrgIdFromClient(data.client_id)
+    const { role } = await requireOrgRole(orgId)
+    assertCanWrite(role)
 
     const encrypted_password = encrypt(data.password)
 
@@ -141,6 +170,11 @@ export async function createSecret(data: SecretFormData) {
 export async function revealSecret(secretId: string): Promise<string> {
     const supabase = await createClient() as any
 
+    // Vérification du rôle (les Lecteurs ne peuvent pas révéler)
+    const orgId = await getOrgIdFromSecret(secretId)
+    const { role } = await requireOrgRole(orgId)
+    assertCanRevealSecrets(role)
+
     // TODO: Ajouter un log d'audit ici ("User X revealed Secret Y")
 
     const { data, error } = await supabase
@@ -164,6 +198,11 @@ export async function revealSecret(secretId: string): Promise<string> {
 export async function deleteSecret(secretId: string, clientId: string) {
     const supabase = await createClient() as any
 
+    // Vérification du rôle (admin seulement)
+    const orgId = await getOrgIdFromClient(clientId)
+    const { role } = await requireOrgRole(orgId)
+    assertCanDelete(role)
+
     // Soft delete
     const { error } = await supabase
         .from('secrets')
@@ -180,6 +219,11 @@ export async function deleteSecret(secretId: string, clientId: string) {
 
 export async function updateSecret(secretId: string, clientId: string, data: Partial<SecretFormData>) {
     const supabase = await createClient() as any
+
+    // Vérification du rôle
+    const orgId = await getOrgIdFromClient(clientId)
+    const { role } = await requireOrgRole(orgId)
+    assertCanWrite(role)
 
     const updateData: any = {
         title: data.title,

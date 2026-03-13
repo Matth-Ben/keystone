@@ -1,31 +1,38 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { type EmailOtpType } from '@supabase/supabase-js'
 
 export async function GET(request: Request) {
     const { searchParams, origin } = new URL(request.url)
-    const code = searchParams.get('code')
-    // if "next" is in param, use it as the redirect URL
     const next = searchParams.get('next') ?? '/clients'
 
-    if (code) {
-        const supabase = await createClient()
-        const { error } = await supabase.auth.exchangeCodeForSession(code)
+    const forwardedHost = request.headers.get('x-forwarded-host')
+    const isLocalEnv = process.env.NODE_ENV === 'development'
 
-        if (!error) {
-            const forwardedHost = request.headers.get('x-forwarded-host') // original origin before load balancer
-            const isLocalEnv = process.env.NODE_ENV === 'development'
-
-            if (isLocalEnv) {
-                // we can be sure that there is no load balancer in between, so no need to watch for X-Forwarded-Host
-                return NextResponse.redirect(`${origin}${next}`)
-            } else if (forwardedHost) {
-                return NextResponse.redirect(`https://${forwardedHost}${next}`)
-            } else {
-                return NextResponse.redirect(`${origin}${next}`)
-            }
-        }
+    const buildRedirect = (path: string) => {
+        if (isLocalEnv) return NextResponse.redirect(`${origin}${path}`)
+        if (forwardedHost) return NextResponse.redirect(`https://${forwardedHost}${path}`)
+        return NextResponse.redirect(`${origin}${path}`)
     }
 
-    // return the user to an error page with instructions
+    const supabase = await createClient()
+
+    // Flow token_hash (email template personnalisé — recommandé pour SSR)
+    const token_hash = searchParams.get('token_hash')
+    const type = searchParams.get('type') as EmailOtpType | null
+
+    if (token_hash && type) {
+        const { error } = await supabase.auth.verifyOtp({ type, token_hash })
+        if (!error) return buildRedirect(next)
+    }
+
+    // Flow PKCE (fallback — code verifier doit être présent dans les cookies)
+    const code = searchParams.get('code')
+
+    if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code)
+        if (!error) return buildRedirect(next)
+    }
+
     return NextResponse.redirect(`${origin}/login?error=auth_callback_error`)
 }

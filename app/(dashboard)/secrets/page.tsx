@@ -3,6 +3,7 @@ import { getAllSecrets } from '@/lib/actions/secrets'
 import { getOrganizationCookie } from '@/lib/actions/organization-cookie'
 import { SecretList } from '@/components/secrets/secret-list'
 import { Skeleton } from '@/components/ui/skeleton'
+import { requireOrgRole, type OrgRole } from '@/lib/rbac'
 
 export const metadata = {
     title: 'Tous les Secrets',
@@ -11,9 +12,15 @@ export const metadata = {
 export default async function SecretsPage() {
     const organizationId = await getOrganizationCookie()
     let secrets: any[] = []
+    let role: OrgRole = 'restricted'
 
     if (organizationId) {
-        secrets = await getAllSecrets(organizationId)
+        const [fetchedSecrets, membership] = await Promise.all([
+            getAllSecrets(organizationId),
+            requireOrgRole(organizationId),
+        ])
+        secrets = fetchedSecrets
+        role = membership.role
     }
 
     return (
@@ -30,7 +37,7 @@ export default async function SecretsPage() {
                 <Skeleton className="h-40 w-full" />
                 <Skeleton className="h-40 w-full" />
             </div>}>
-                <SecretList secrets={secrets} />
+                <SecretList secrets={secrets} role={role} />
             </Suspense>
         </div>
     )

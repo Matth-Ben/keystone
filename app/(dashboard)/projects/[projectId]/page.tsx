@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ProjectActions } from '@/components/projects/project-actions'
 import { RecentTracker } from '@/components/dashboard/recent-tracker'
+import { requireOrgRole } from '@/lib/rbac'
 
 interface PageProps {
     params: Promise<{
@@ -19,8 +20,12 @@ export default async function ProjectPage({ params }: PageProps) {
     try {
         const resolvedParams = await params
         const project = await getProject(resolvedParams.projectId)
-        // On récupère le client pour le fil d'ariane
-        const client = await getClient(project.client_id)
+
+        // Parallel : client (fil d'ariane) + rôle utilisateur
+        const [client, { role }] = await Promise.all([
+            getClient(project.client_id),
+            requireOrgRole(project.organization_id),
+        ])
 
         return (
             <div className="space-y-6">
@@ -54,7 +59,7 @@ export default async function ProjectPage({ params }: PageProps) {
                     </div>
                     <div className="flex items-center gap-2">
                         <RecentTracker type="project" id={project.id} name={project.name} />
-                        <ProjectActions project={project} />
+                        <ProjectActions project={project} role={role} />
                     </div>
                 </div>
 

@@ -11,6 +11,7 @@ import { SecretList } from '@/components/secrets/secret-list'
 import { ClientInfoTab } from '@/components/clients/client-info-tab'
 import { ClientDocumentsTab } from '@/components/clients/client-documents-tab'
 import { notFound } from 'next/navigation'
+import { requireOrgRole } from '@/lib/rbac'
 
 interface PageProps {
     params: Promise<{
@@ -21,15 +22,17 @@ interface PageProps {
 export default async function ClientPage({ params }: PageProps) {
     const resolvedParams = await params
 
-    // Parallel fetching
-    const [client, secrets] = await Promise.all([
-        getClient(resolvedParams.clientId).catch(() => null),
-        getSecrets(resolvedParams.clientId).catch(() => [])
-    ])
+    const client = await getClient(resolvedParams.clientId).catch(() => null)
 
     if (!client) {
         notFound()
     }
+
+    // Parallel fetching du rôle et des secrets (client déjà chargé pour connaître l'orgId)
+    const [secrets, { role }] = await Promise.all([
+        getSecrets(resolvedParams.clientId).catch(() => []),
+        requireOrgRole(client.organization_id),
+    ])
 
     return (
         <div className="space-y-6">
@@ -72,7 +75,7 @@ export default async function ClientPage({ params }: PageProps) {
                 </div>
                 <div className="flex items-center gap-2">
                     <RecentTracker type="client" id={client.id} name={client.name} />
-                    <ClientActions client={client} />
+                    <ClientActions client={client} role={role} />
                 </div>
             </div>
 
@@ -92,7 +95,7 @@ export default async function ClientPage({ params }: PageProps) {
                 </TabsContent>
 
                 <TabsContent value="secrets">
-                    <SecretList secrets={secrets} clientId={client.id} />
+                    <SecretList secrets={secrets} clientId={client.id} role={role} />
                 </TabsContent>
 
                 {client.drive_folder_url && (

@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { requireOrgRole, assertCanUpdateOrg } from '@/lib/rbac'
 
 export async function getUserOrganizations() {
     const supabase = await createClient()
@@ -159,8 +160,9 @@ export async function updateOrganization(
 
     console.log('UPDATING Organization', organizationId, data)
 
-    // Vérifier les droits (RLS devrait gérer, mais on peut vérifier membership admin ici si besoin)
-    // Pour l'instant on fait confiance aux policies Supabase + vérif auth
+    // Vérification du rôle : admin requis
+    const { role } = await requireOrgRole(organizationId)
+    assertCanUpdateOrg(role)
 
     const { error, data: updateData } = await (supabase
         .from('organizations') as any)

@@ -12,8 +12,11 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { toast } from 'sonner'
 import { useState } from 'react'
+import type { OrgRole } from '@/lib/rbac'
 
-export function ProjectActions({ project }: { project: Project }) {
+export function ProjectActions({ project, role }: { project: Project; role: OrgRole }) {
+    const canWrite = role !== 'restricted'
+    const canDelete = role === 'admin'
     const router = useRouter()
 
     const handleDelete = async () => {
@@ -28,6 +31,8 @@ export function ProjectActions({ project }: { project: Project }) {
         }
     }
 
+    if (!canWrite && !canDelete) return null
+
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -36,14 +41,18 @@ export function ProjectActions({ project }: { project: Project }) {
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-                <DropdownMenuItem>
-                    <Edit className="mr-2 h-4 w-4" />
-                    Modifier
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleDelete} className="text-destructive">
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    Supprimer
-                </DropdownMenuItem>
+                {canWrite && (
+                    <DropdownMenuItem>
+                        <Edit className="mr-2 h-4 w-4" />
+                        Modifier
+                    </DropdownMenuItem>
+                )}
+                {canDelete && (
+                    <DropdownMenuItem onClick={handleDelete} className="text-destructive">
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Supprimer
+                    </DropdownMenuItem>
+                )}
             </DropdownMenuContent>
         </DropdownMenu>
     )

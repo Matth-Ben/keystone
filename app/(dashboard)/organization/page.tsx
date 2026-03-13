@@ -1,8 +1,8 @@
-import { Suspense } from 'react'
 import { getOrganizationCookie } from '@/lib/actions/organization-cookie'
 import { getOrganization } from '@/lib/actions/organizations'
+import { getOrganizationMembers, getInvitations } from '@/lib/actions/members'
+import { createClient } from '@/lib/supabase/server'
 import { OrganizationView } from '@/components/organization/organization-view'
-import { Skeleton } from '@/components/ui/skeleton'
 import { redirect } from 'next/navigation'
 
 export const metadata = {
@@ -13,12 +13,26 @@ export default async function OrganizationPage() {
     const organizationId = await getOrganizationCookie()
 
     if (!organizationId) {
-        // Rediriger vers onboarding ou home si pas d'org sélectionnée
         redirect('/')
     }
 
     try {
-        const organization = await getOrganization(organizationId)
+        const supabase = await createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+
+        if (!user) {
+            redirect('/login')
+        }
+
+        const [organization, members] = await Promise.all([
+            getOrganization(organizationId),
+            getOrganizationMembers(organizationId),
+        ])
+
+        const currentMember = members.find(m => m.user_id === user.id)
+        const isAdmin = currentMember?.role === 'admin'
+
+        const invitations = isAdmin ? await getInvitations(organizationId) : []
 
         return (
             <div className="space-y-6">
@@ -29,13 +43,16 @@ export default async function OrganizationPage() {
                     </p>
                 </div>
 
-                <Suspense fallback={<Skeleton className="h-[400px] w-full" />}>
-                    <OrganizationView organization={organization} />
-                </Suspense>
+                <OrganizationView
+                    organization={organization}
+                    members={members}
+                    invitations={invitations}
+                    organizationId={organizationId}
+                    isAdmin={isAdmin}
+                />
             </div>
         )
-    } catch (error) {
-        // Si organisation introuvable (ex: supprimée, cookie obsolète)
+    } catch {
         return (
             <div className="p-8 text-center">
                 <h3 className="text-lg font-semibold">Organisation introuvable</h3>

@@ -23,8 +23,11 @@ import {
 import { toast } from 'sonner'
 import { CreateClientDialog } from '@/components/clients/create-client-dialog'
 import { useState } from 'react'
+import type { OrgRole } from '@/lib/rbac'
 
-export function ClientActions({ client }: { client: Client }) {
+export function ClientActions({ client, role }: { client: Client; role: OrgRole }) {
+    const canWrite = role !== 'restricted'
+    const canDelete = role === 'admin'
     const router = useRouter()
     const [editOpen, setEditOpen] = useState(false)
     const [deleteOpen, setDeleteOpen] = useState(false)
@@ -39,6 +42,8 @@ export function ClientActions({ client }: { client: Client }) {
         }
     }
 
+    if (!canWrite && !canDelete) return null
+
     return (
         <>
             <DropdownMenu>
@@ -48,17 +53,21 @@ export function ClientActions({ client }: { client: Client }) {
                     </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => setEditOpen(true)}>
-                        <Edit className="mr-2 h-4 w-4" />
-                        Modifier
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                        onClick={() => setDeleteOpen(true)}
-                        className="text-destructive"
-                    >
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Supprimer
-                    </DropdownMenuItem>
+                    {canWrite && (
+                        <DropdownMenuItem onClick={() => setEditOpen(true)}>
+                            <Edit className="mr-2 h-4 w-4" />
+                            Modifier
+                        </DropdownMenuItem>
+                    )}
+                    {canDelete && (
+                        <DropdownMenuItem
+                            onClick={() => setDeleteOpen(true)}
+                            className="text-destructive"
+                        >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Supprimer
+                        </DropdownMenuItem>
+                    )}
                 </DropdownMenuContent>
             </DropdownMenu>
 

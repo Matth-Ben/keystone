@@ -2,6 +2,8 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { requireOrgRole, assertCanManageMembers } from '@/lib/rbac'
+import { revalidatePath } from 'next/cache'
 
 export async function getOrganizationMembers(organizationId: string) {
     const supabase = await createClient()
@@ -208,5 +210,139 @@ export async function removeMember(memberId: string) {
         throw new Error('Erreur lors du retrait du membre')
     }
 
+    revalidatePath('/settings/members')
     return { success: true }
+}
+
+export async function getInvitations(organizationId: string) {
+    const { role } = await requireOrgRole(organizationId)
+    assertCanManageMembers(role)
+
+    const adminClient = createAdminClient() as any
+
+    const { data, error } = await adminClient
+        .from('invitations')
+        .select('id, email, role, created_at, expires_at')
+        .eq('organization_id', organizationId)
+        .eq('status', 'pending')
+        .gt('expires_at', new Date().toISOString())
+        .order('created_at', { ascending: false })
+
+    if (error) throw new Error('Erreur lors de la récupération des invitations')
+    return data as { id: string; email: string; role: string; created_at: string; expires_at: string }[]
+}
+
+export async function inviteMember(
+    organizationId: string,
+    email: string,
+    role: 'admin' | 'member' | 'restricted'
+) {
+    const { userId, role: currentUserRole } = await requireOrgRole(organizationId)
+    assertCanManageMembers(currentUserRole)
+
+    const adminClient = createAdminClient() as any
+
+    // Vérifier qu'il n'y a pas déjà une invitation en attente pour cet email
+    const { data: existing } = await adminClient
+        .from('invitations')
+        .select('id')
+        .eq('organization_id', organizationId)
+        .eq('email', email)
+        .eq('status', 'pending')
+        .gt('expires_at', new Date().toISOString())
+        .maybeSingle()
+
+    if (existing) {
+        throw new Error('Une invitation est déjà en attente pour cet email')
+    }
+
+    const token = crypto.randomUUID()
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+
+    const { error } = await adminClient
+        .from('invitations')
+        .insert({
+            organization_id: organizationId,
+            email,
+            role,
+            invited_by: userId,
+            status: 'pending',
+            token,
+            expires_at: expiresAt,
+        })
+
+    if (error) {
+        console.error('Error creating invitation:', error)
+        throw new Error('Erreur lors de la création de l\'invitation')
+    }
+
+    const inviteUrl = `${process.env.NEXT_PUBLIC_APP_URL}/invite/${token}`
+    revalidatePath('/settings/members')
+    return { inviteUrl }
+}
+
+export async function cancelInvitation(invitationId: string) {
+    const adminClient = createAdminClient() as any
+
+    const { data: invitation } = await adminClient
+        .from('invitations')
+        .select('organization_id')
+        .eq('id', invitationId)
+        .single()
+
+    if (!invitation) throw new Error('Invitation non trouvée')
+
+    const { role } = await requireOrgRole(invitation.organization_id)
+    assertCanManageMembers(role)
+
+    const { error } = await adminClient
+        .from('invitations')
+        .update({ status: 'declined' })
+        .eq('id', invitationId)
+
+    if (error) throw new Error('Erreur lors de l\'annulation de l\'invitation')
+
+    revalidatePath('/settings/members')
+    return { success: true }
+}
+
+export async function acceptInvitation(token: string) {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) throw new Error('Non authentifié')
+
+    const adminClient = createAdminClient() as any
+
+    const { data: invitation } = await adminClient
+        .from('invitations')
+        .select('*')
+        .eq('token', token)
+        .eq('status', 'pending')
+        .gt('expires_at', new Date().toISOString())
+        .single()
+
+    if (!invitation) throw new Error('Invitation invalide ou expirée')
+    if (invitation.email !== user.email) throw new Error('Cette invitation est destinée à une autre adresse email')
+
+    // Ajouter à l'organisation
+    const { error: memberError } = await adminClient
+        .from('organization_members')
+        .insert({
+            organization_id: invitation.organization_id,
+            user_id: user.id,
+            role: invitation.role,
+        })
+
+    if (memberError && memberError.code !== '23505') {
+        throw new Error('Erreur lors de l\'ajout à l\'organisation')
+    }
+
+    // Marquer l'invitation comme acceptée
+    await adminClient
+        .from('invitations')
+        .update({ status: 'accepted' })
+        .eq('id', invitation.id)
+
+    return { organizationId: invitation.organization_id }
 }

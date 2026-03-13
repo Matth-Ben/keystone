@@ -5,6 +5,8 @@ import { ClientsGrid } from '@/components/clients/clients-grid'
 import { ClientSearch } from '@/components/clients/client-search'
 import { Skeleton } from '@/components/ui/skeleton'
 import { CreateClientDialogWrapper } from '@/components/clients/create-client-dialog-wrapper'
+import { requireOrgRole, type OrgRole } from '@/lib/rbac'
+import { PermissionGate } from '@/components/ui/permission-gate'
 
 export default async function ClientsPage({
     searchParams,
@@ -16,8 +18,15 @@ export default async function ClientsPage({
     const organizationId = await getOrganizationCookie()
 
     let clients: Client[] = []
+    let role: OrgRole = 'restricted'
+
     if (organizationId) {
-        clients = await getClients(organizationId, query)
+        const [fetchedClients, membership] = await Promise.all([
+            getClients(organizationId, query),
+            requireOrgRole(organizationId),
+        ])
+        clients = fetchedClients
+        role = membership.role
     }
 
     return (
@@ -29,7 +38,9 @@ export default async function ClientsPage({
                         Gérez vos clients
                     </p>
                 </div>
-                <CreateClientDialogWrapper />
+                <PermissionGate role={role} require="write">
+                    <CreateClientDialogWrapper />
+                </PermissionGate>
             </div>
 
             <div className="relative">

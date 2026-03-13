@@ -7,9 +7,19 @@ import { OrganizationDetails } from '@/lib/actions/organizations'
 
 interface OrganizationViewProps {
     organization: OrganizationDetails
+    members: any[]
+    invitations: any[]
+    organizationId: string
+    isAdmin: boolean
 }
 
-export function OrganizationView({ organization }: OrganizationViewProps) {
+export function OrganizationView({
+    organization,
+    members,
+    invitations,
+    organizationId,
+    isAdmin,
+}: OrganizationViewProps) {
     return (
         <Tabs defaultValue="details" className="space-y-4">
             <TabsList>
@@ -24,7 +34,14 @@ export function OrganizationView({ organization }: OrganizationViewProps) {
             </TabsContent>
 
             <TabsContent value="members" className="space-y-4">
-                <MembersTab />
+                <div className="rounded-lg border bg-card p-6">
+                    <MembersTab
+                        members={members}
+                        invitations={invitations}
+                        organizationId={organizationId}
+                        isAdmin={isAdmin}
+                    />
+                </div>
             </TabsContent>
         </Tabs>
     )
