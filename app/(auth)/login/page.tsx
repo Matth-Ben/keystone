@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -11,11 +11,13 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { toast } from 'sonner'
 import { signInWithGoogle } from '@/lib/actions/auth-actions'
 
-export default function LoginPage() {
+function LoginForm() {
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
     const [loading, setLoading] = useState(false)
     const router = useRouter()
+    const searchParams = useSearchParams()
+    const next = searchParams.get('next') || '/clients'
     const supabase = createClient()
 
     const handleLogin = async (e: React.FormEvent) => {
@@ -23,18 +25,11 @@ export default function LoginPage() {
         setLoading(true)
 
         try {
-            const { data, error } = await supabase.auth.signInWithPassword({
-                email,
-                password,
-            })
-
+            const { error } = await supabase.auth.signInWithPassword({ email, password })
             if (error) throw error
 
-            toast.success('Connexion réussie', {
-                description: 'Bienvenue !',
-            })
-
-            router.push('/clients')
+            toast.success('Connexion réussie', { description: 'Bienvenue !' })
+            router.push(next)
             router.refresh()
         } catch (error: any) {
             toast.error('Erreur de connexion', {
@@ -44,6 +39,10 @@ export default function LoginPage() {
             setLoading(false)
         }
     }
+
+    const registerHref = next !== '/clients'
+        ? `/register?next=${encodeURIComponent(next)}`
+        : '/register'
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 p-4">
@@ -71,10 +70,7 @@ export default function LoginPage() {
                         <div className="space-y-2">
                             <div className="flex items-center justify-between">
                                 <Label htmlFor="password">Mot de passe</Label>
-                                <Link
-                                    href="/reset-password"
-                                    className="text-sm text-primary hover:underline"
-                                >
+                                <Link href="/reset-password" className="text-sm text-primary hover:underline">
                                     Mot de passe oublié ?
                                 </Link>
                             </div>
@@ -94,7 +90,7 @@ export default function LoginPage() {
                         </Button>
                         <p className="text-sm text-center text-muted-foreground">
                             Pas encore de compte ?{' '}
-                            <Link href="/register" className="text-primary hover:underline font-medium">
+                            <Link href={registerHref} className="text-primary hover:underline font-medium">
                                 Créer un compte
                             </Link>
                         </p>
@@ -122,5 +118,13 @@ export default function LoginPage() {
                 </div>
             </Card>
         </div>
+    )
+}
+
+export default function LoginPage() {
+    return (
+        <Suspense>
+            <LoginForm />
+        </Suspense>
     )
 }

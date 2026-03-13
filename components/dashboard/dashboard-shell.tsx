@@ -9,6 +9,7 @@ import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { Favorite, Organization } from '@/lib/store/app-store'
 import { DashboardInitializer } from '@/components/dashboard/dashboard-initializer'
 import { OrganizationSelectionModal } from '@/components/dashboard/organization-selection-modal'
+import { RemovalWatcher } from '@/components/organization/removal-watcher'
 
 interface DashboardShellProps {
     children: React.ReactNode
@@ -47,9 +48,18 @@ export function DashboardShell({ children, favorites, organizations, currentOrgI
         }
     }
 
+    const currentOrg = organizations.find(o => o.id === currentOrgId)
+
     return (
         <div className="flex h-screen overflow-hidden bg-background">
             <DashboardInitializer />
+
+            {currentOrgId && currentOrg && (
+                <RemovalWatcher
+                    organizationId={currentOrgId}
+                    organizationName={currentOrg.name}
+                />
+            )}
 
             <OrganizationSelectionModal
                 organizations={organizations}

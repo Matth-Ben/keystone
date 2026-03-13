@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireOrgRole, assertCanManageMembers } from '@/lib/rbac'
 import { revalidatePath } from 'next/cache'
+import { sendInvitationEmail } from '@/lib/email'
 
 export async function getOrganizationMembers(organizationId: string) {
     const supabase = await createClient()
@@ -199,8 +200,8 @@ export async function removeMember(memberId: string) {
         }
     }
 
-    // Retirer le membre
-    const { error } = await supabase
+    // Retirer le membre (admin client pour bypasser le RLS)
+    const { error } = await adminClient
         .from('organization_members')
         .delete()
         .eq('id', memberId)
@@ -210,7 +211,7 @@ export async function removeMember(memberId: string) {
         throw new Error('Erreur lors du retrait du membre')
     }
 
-    revalidatePath('/settings/members')
+    revalidatePath('/organization')
     return { success: true }
 }
 
@@ -277,7 +278,27 @@ export async function inviteMember(
     }
 
     const inviteUrl = `${process.env.NEXT_PUBLIC_APP_URL}/invite/${token}`
-    revalidatePath('/settings/members')
+
+    // Récupérer le nom de l'organisation pour l'email
+    const { data: org } = await adminClient
+        .from('organizations')
+        .select('name')
+        .eq('id', organizationId)
+        .single()
+
+    // Envoyer l'email d'invitation (on ne throw pas si ça échoue pour ne pas bloquer)
+    try {
+        await sendInvitationEmail({
+            to: email,
+            orgName: org?.name ?? 'l\'organisation',
+            role,
+            inviteUrl,
+        })
+    } catch (emailError) {
+        console.error('Failed to send invitation email:', emailError)
+    }
+
+    revalidatePath('/organization')
     return { inviteUrl }
 }
 

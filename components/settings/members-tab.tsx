@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Trash2, UserPlus, Copy, Check, Clock, Mail } from 'lucide-react'
+import { Trash2, UserPlus, Copy, Check, Clock, Mail, CheckCircle2 } from 'lucide-react'
 import { updateMemberRole, removeMember, inviteMember, cancelInvitation } from '@/lib/actions/members'
 import {
     Table,
@@ -295,7 +295,7 @@ export function MembersTab({ members, invitations, organizationId, isAdmin }: Me
                         <DialogTitle>Inviter un membre</DialogTitle>
                         <DialogDescription>
                             {inviteUrl
-                                ? 'Partagez ce lien avec la personne à inviter. Il expire dans 7 jours.'
+                                ? `Un email d'invitation a été envoyé à ${inviteEmail}.`
                                 : 'Entrez l\'adresse email et choisissez un rôle.'}
                         </DialogDescription>
                     </DialogHeader>
@@ -343,14 +343,23 @@ export function MembersTab({ members, invitations, organizationId, isAdmin }: Me
                             </div>
                         </div>
                     ) : (
-                        <div className="py-2">
-                            <div className="flex items-center gap-2 rounded-md border bg-muted/50 p-3">
-                                <span className="flex-1 truncate font-mono text-sm text-muted-foreground">
-                                    {inviteUrl}
+                        <div className="py-2 space-y-3">
+                            <div className="flex items-center gap-3 rounded-md border bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-900 p-3">
+                                <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0" />
+                                <span className="text-sm text-green-800 dark:text-green-300">
+                                    Invitation envoyée à <strong>{inviteEmail}</strong>
                                 </span>
-                                <Button variant="ghost" size="icon" onClick={handleCopyInviteUrl} className="shrink-0">
-                                    {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-                                </Button>
+                            </div>
+                            <div className="space-y-1">
+                                <p className="text-xs text-muted-foreground">Lien de secours (si l'email n'arrive pas) :</p>
+                                <div className="flex items-center gap-2 rounded-md border bg-muted/50 p-2">
+                                    <span className="flex-1 truncate font-mono text-xs text-muted-foreground">
+                                        {inviteUrl}
+                                    </span>
+                                    <Button variant="ghost" size="icon" onClick={handleCopyInviteUrl} className="shrink-0 h-7 w-7">
+                                        {copied ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
+                                    </Button>
+                                </div>
                             </div>
                         </div>
                     )}
@@ -362,7 +371,7 @@ export function MembersTab({ members, invitations, organizationId, isAdmin }: Me
                                     Annuler
                                 </Button>
                                 <Button onClick={handleInvite} disabled={!inviteEmail.trim() || inviteLoading}>
-                                    {inviteLoading ? 'Création...' : 'Générer le lien'}
+                                    {inviteLoading ? 'Envoi...' : 'Inviter'}
                                 </Button>
                             </>
                         ) : (

@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -11,42 +11,44 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { toast } from 'sonner'
 import { signInWithGoogle } from '@/lib/actions/auth-actions'
 
-export default function RegisterPage() {
+function RegisterForm() {
     const [fullName, setFullName] = useState('')
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
     const [confirmPassword, setConfirmPassword] = useState('')
     const [loading, setLoading] = useState(false)
     const router = useRouter()
+    const searchParams = useSearchParams()
+    const next = searchParams.get('next') || ''
     const supabase = createClient()
 
     const handleRegister = async (e: React.FormEvent) => {
         e.preventDefault()
 
         if (password !== confirmPassword) {
-            toast.error('Erreur', {
-                description: 'Les mots de passe ne correspondent pas',
-            })
+            toast.error('Erreur', { description: 'Les mots de passe ne correspondent pas' })
             return
         }
 
         if (password.length < 8) {
-            toast.error('Erreur', {
-                description: 'Le mot de passe doit contenir au moins 8 caractères',
-            })
+            toast.error('Erreur', { description: 'Le mot de passe doit contenir au moins 8 caractères' })
             return
         }
 
         setLoading(true)
 
         try {
-            const { data, error } = await supabase.auth.signUp({
+            const appUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin
+            const callbackUrl = next
+                ? `${appUrl}/auth/callback?next=${encodeURIComponent(next)}`
+                : `${appUrl}/auth/callback`
+
+            const { error } = await supabase.auth.signUp({
                 email,
                 password,
                 options: {
-                    data: {
-                        full_name: fullName,
-                    },
+                    data: { full_name: fullName },
+                    emailRedirectTo: callbackUrl,
                 },
             })
 
@@ -56,9 +58,9 @@ export default function RegisterPage() {
                 description: 'Vérifiez votre email pour confirmer votre compte.',
             })
 
-            // Rediriger vers login après inscription
             setTimeout(() => {
-                router.push('/login')
+                const loginHref = next ? `/login?next=${encodeURIComponent(next)}` : '/login'
+                router.push(loginHref)
             }, 2000)
         } catch (error: any) {
             toast.error('Erreur d\'inscription', {
@@ -69,13 +71,17 @@ export default function RegisterPage() {
         }
     }
 
+    const loginHref = next ? `/login?next=${encodeURIComponent(next)}` : '/login'
+
     return (
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 p-4">
             <Card className="w-full max-w-md">
                 <CardHeader className="space-y-1">
                     <CardTitle className="text-2xl font-bold">Créer un compte</CardTitle>
                     <CardDescription>
-                        Rejoignez Keystone pour gérer vos accès en toute sécurité
+                        {next.startsWith('/invite/')
+                            ? 'Créez votre compte pour rejoindre l\'organisation'
+                            : 'Rejoignez Keystone pour gérer vos accès en toute sécurité'}
                     </CardDescription>
                 </CardHeader>
                 <form onSubmit={handleRegister}>
@@ -115,9 +121,7 @@ export default function RegisterPage() {
                                 disabled={loading}
                                 minLength={8}
                             />
-                            <p className="text-xs text-muted-foreground">
-                                Minimum 8 caractères
-                            </p>
+                            <p className="text-xs text-muted-foreground">Minimum 8 caractères</p>
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="confirmPassword">Confirmer le mot de passe</Label>
@@ -137,7 +141,7 @@ export default function RegisterPage() {
                         </Button>
                         <p className="text-sm text-center text-muted-foreground">
                             Déjà un compte ?{' '}
-                            <Link href="/login" className="text-primary hover:underline font-medium">
+                            <Link href={loginHref} className="text-primary hover:underline font-medium">
                                 Se connecter
                             </Link>
                         </p>
@@ -165,5 +169,13 @@ export default function RegisterPage() {
                 </div>
             </Card>
         </div>
+    )
+}
+
+export default function RegisterPage() {
+    return (
+        <Suspense>
+            <RegisterForm />
+        </Suspense>
     )
 }
