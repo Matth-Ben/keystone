@@ -3,6 +3,7 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { MembersTab } from '@/components/settings/members-tab'
 import { OrganizationDetailsForm } from '@/components/organization/organization-details-form'
+import { DataTab } from '@/components/organization/data-tab'
 import { OrganizationDetails } from '@/lib/actions/organizations'
 
 interface OrganizationViewProps {
@@ -25,6 +26,7 @@ export function OrganizationView({
             <TabsList>
                 <TabsTrigger value="details">Détails</TabsTrigger>
                 <TabsTrigger value="members">Membres</TabsTrigger>
+                <TabsTrigger value="data">Données</TabsTrigger>
             </TabsList>
 
             <TabsContent value="details" className="space-y-4">
@@ -42,6 +44,13 @@ export function OrganizationView({
                         isAdmin={isAdmin}
                     />
                 </div>
+            </TabsContent>
+
+            <TabsContent value="data" className="space-y-4">
+                <DataTab
+                    organizationId={organizationId}
+                    isAdmin={isAdmin}
+                />
             </TabsContent>
         </Tabs>
     )
