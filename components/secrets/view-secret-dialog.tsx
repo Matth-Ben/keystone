@@ -236,7 +236,7 @@ export function ViewSecretDialog({
                     open={editOpen}
                     onOpenChange={onEditOpenChange}
                     secretToEdit={secret}
-                    clientId={secret.client_id}
+                    clientId={secret.client_id ?? undefined}
                 />
             )}
         </>

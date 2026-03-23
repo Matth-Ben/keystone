@@ -189,9 +189,9 @@ export function SecretList({ secrets, clientId, role = 'restricted' }: SecretLis
                                             <div>
                                                 <CardTitle className="text-base font-semibold leading-none mb-1.5 flex items-center gap-2">
                                                     {secret.title}
-                                                    {!clientId && secret.clients?.name && (
+                                                    {!clientId && (
                                                         <Badge variant="outline" className="text-[10px] font-normal h-5 px-1.5 text-muted-foreground">
-                                                            {secret.clients.name}
+                                                            {secret.clients?.name || 'Sans client'}
                                                         </Badge>
                                                     )}
                                                 </CardTitle>
@@ -290,7 +290,7 @@ export function SecretList({ secrets, clientId, role = 'restricted' }: SecretLis
             <CreateSecretDialog
                 open={isCreateOpen}
                 onOpenChange={setIsCreateOpen}
-                clientId={clientId || ''} // Attention ici, si pas de clientId, le dialog est en mode orphelin
+                clientId={clientId}
                 secretToEdit={secretToEdit}
             />
 

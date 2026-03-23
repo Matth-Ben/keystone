@@ -22,7 +22,7 @@ export default async function DashboardLayout({
 
     // Validation du cookie : est-ce que l'ID stocké correspond à une org de l'utilisateur ?
     // NOTE: La validation est faite côté client dans DashboardShell pour éviter les boucles de redirection serveur
-    const isOrgValid = !currentOrgId || organizations.some(org => org.id === currentOrgId)
+    const isOrgValid = !currentOrgId || organizations.some((org: { id: string }) => org.id === currentOrgId)
 
     // Convertir les favoris au format du store/interface de la sidebar
     const favorites = rawFavorites.map(f => ({

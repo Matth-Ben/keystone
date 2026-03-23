@@ -10,7 +10,8 @@ export type SecretType = 'ssh' | 'ftp' | 'db' | 'cms' | 'api' | 'other'
 
 export interface Secret {
     id: string
-    client_id: string
+    organization_id: string
+    client_id: string | null
     type: SecretType
     title: string
     username?: string | null
@@ -26,7 +27,8 @@ export interface Secret {
 
 // Schéma pour la création/édition
 export interface SecretFormData {
-    client_id: string
+    organization_id: string
+    client_id?: string | null
     type: SecretType
     title: string
     password?: string // Optionnel en édition
@@ -46,17 +48,17 @@ export async function getAllSecrets(organizationId: string): Promise<(Secret & {
     // 2. Récupération données (Admin Client pour contourner RLS)
     const adminClient = createAdminClient() as any
 
+    // Utiliser organization_id directement (left join pour inclure les secrets sans client)
     const { data, error } = await adminClient
         .from('secrets')
         .select(`
             *,
-            clients!inner (
+            clients (
                 id,
-                name,
-                organization_id
+                name
             )
         `)
-        .eq('clients.organization_id', organizationId)
+        .eq('organization_id', organizationId)
         .is('deleted_at', null)
         .order('created_at', { ascending: false })
 
@@ -127,11 +129,11 @@ async function getOrgIdFromSecret(secretId: string): Promise<string> {
     const adminClient = createAdminClient() as any
     const { data, error } = await adminClient
         .from('secrets')
-        .select('client_id, clients!inner(organization_id)')
+        .select('organization_id')
         .eq('id', secretId)
         .single()
     if (error || !data) throw new Error('Secret introuvable')
-    return (data.clients as any).organization_id
+    return data.organization_id
 }
 
 export async function createSecret(data: SecretFormData) {
@@ -142,9 +144,8 @@ export async function createSecret(data: SecretFormData) {
     if (!user) throw new Error('Non authentifié')
     if (!data.password) throw new Error('Le mot de passe/clé est requis')
 
-    // 2. Vérification du rôle
-    const orgId = await getOrgIdFromClient(data.client_id)
-    const { role } = await requireOrgRole(orgId)
+    // 2. Vérification du rôle (utiliser organization_id directement)
+    const { role } = await requireOrgRole(data.organization_id)
     assertCanWrite(role)
 
     // 3. Création (Admin Client pour contourner RLS)
@@ -154,7 +155,8 @@ export async function createSecret(data: SecretFormData) {
     const { error } = await adminClient
         .from('secrets')
         .insert({
-            client_id: data.client_id,
+            organization_id: data.organization_id,
+            client_id: data.client_id || null,
             type: data.type,
             title: data.title,
             encrypted_password,
@@ -173,7 +175,9 @@ export async function createSecret(data: SecretFormData) {
         throw new Error('Erreur lors de la création du secret')
     }
 
-    revalidatePath(`/clients/${data.client_id}`)
+    if (data.client_id) {
+        revalidatePath(`/clients/${data.client_id}`)
+    }
     revalidatePath('/secrets')
 }
 
@@ -206,9 +210,9 @@ export async function revealSecret(secretId: string): Promise<string> {
     }
 }
 
-export async function deleteSecret(secretId: string, clientId: string) {
-    // 1. Vérification du rôle (admin seulement)
-    const orgId = await getOrgIdFromClient(clientId)
+export async function deleteSecret(secretId: string, clientId?: string | null) {
+    // 1. Vérification du rôle (admin seulement) - utiliser organization_id du secret
+    const orgId = await getOrgIdFromSecret(secretId)
     const { role } = await requireOrgRole(orgId)
     assertCanDelete(role)
 
@@ -224,13 +228,15 @@ export async function deleteSecret(secretId: string, clientId: string) {
         throw new Error('Erreur lors de la suppression')
     }
 
-    revalidatePath(`/clients/${clientId}`)
+    if (clientId) {
+        revalidatePath(`/clients/${clientId}`)
+    }
     revalidatePath('/secrets')
 }
 
-export async function updateSecret(secretId: string, clientId: string, data: Partial<SecretFormData>) {
-    // 1. Vérification du rôle
-    const orgId = await getOrgIdFromClient(clientId)
+export async function updateSecret(secretId: string, data: Partial<SecretFormData>, clientId?: string | null) {
+    // 1. Vérification du rôle - utiliser organization_id du secret
+    const orgId = await getOrgIdFromSecret(secretId)
     const { role } = await requireOrgRole(orgId)
     assertCanWrite(role)
 
@@ -247,6 +253,7 @@ export async function updateSecret(secretId: string, clientId: string, data: Par
         db_name: data.db_name,
         tags: data.tags,
         notes: data.notes,
+        client_id: data.client_id === undefined ? undefined : (data.client_id || null),
         updated_at: new Date().toISOString()
     }
 
@@ -265,6 +272,8 @@ export async function updateSecret(secretId: string, clientId: string, data: Par
         throw new Error('Erreur lors de la modification')
     }
 
-    revalidatePath(`/clients/${clientId}`)
+    if (clientId) {
+        revalidatePath(`/clients/${clientId}`)
+    }
     revalidatePath('/secrets')
 }

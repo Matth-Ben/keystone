@@ -1,12 +1,13 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { requireOrgRole, assertCanUpdateOrg } from '@/lib/rbac'
 
 export async function getUserOrganizations() {
+    // 1. Vérification de l'authentification
     const supabase = await createClient()
-
     const {
         data: { user },
     } = await supabase.auth.getUser()
@@ -15,8 +16,10 @@ export async function getUserOrganizations() {
         throw new Error('Non authentifié')
     }
 
-    // Récupérer les organisations dont l'utilisateur est membre
-    const { data: memberships, error } = await supabase
+    // 2. Récupération des organisations (Admin Client pour contourner RLS)
+    const adminClient = createAdminClient() as any
+
+    const { data: memberships, error } = await adminClient
         .from('organization_members')
         .select(`
             role,
@@ -49,8 +52,8 @@ export async function getUserOrganizations() {
 }
 
 export async function createOrganization(name: string) {
+    // 1. Vérification de l'authentification
     const supabase = await createClient()
-
     const {
         data: { user },
     } = await supabase.auth.getUser()
@@ -59,7 +62,7 @@ export async function createOrganization(name: string) {
         throw new Error('Non authentifié')
     }
 
-    // Créer le slug à partir du nom
+    // 2. Créer le slug à partir du nom
     const slug = name
         .toLowerCase()
         .normalize('NFD')
@@ -67,14 +70,17 @@ export async function createOrganization(name: string) {
         .replace(/[^a-z0-9]+/g, '-') // Remplacer les caractères spéciaux par des tirets
         .replace(/^-+|-+$/g, '') // Retirer les tirets au début et à la fin
 
+    // 3. Création (Admin Client pour contourner RLS)
+    const adminClient = createAdminClient() as any
+
     // Créer l'organisation
-    const { data: organization, error: orgError } = await supabase
+    const { data: organization, error: orgError } = await adminClient
         .from('organizations')
         .insert({
             name,
             slug,
             owner_id: user.id,
-        } as any)
+        })
         .select()
         .single()
 
@@ -84,13 +90,13 @@ export async function createOrganization(name: string) {
     }
 
     // Ajouter l'utilisateur comme admin de l'organisation
-    const { error: memberError } = await supabase
+    const { error: memberError } = await adminClient
         .from('organization_members')
         .insert({
-            organization_id: (organization as any).id,
+            organization_id: organization.id,
             user_id: user.id,
             role: 'admin',
-        } as any)
+        })
 
     if (memberError) {
         // Ignorer l'erreur si l'utilisateur est déjà membre (code 23505)
@@ -98,17 +104,14 @@ export async function createOrganization(name: string) {
             console.log('User already member of organization, continuing...')
         } else {
             console.error('Error adding user to organization:', memberError)
-            // On ne throw pas ici pour ne pas bloquer le flux, car l'org est créée
-            // et l'utilisateur est probablement déjà dedans
         }
     }
 
-    // ... (existing code for createOrganization)
     revalidatePath('/', 'layout')
     return {
-        id: (organization as any).id,
-        name: (organization as any).name,
-        slug: (organization as any).slug,
+        id: organization.id,
+        name: organization.name,
+        slug: organization.slug,
         role: 'admin' as const,
     }
 }
@@ -125,9 +128,13 @@ export interface OrganizationDetails {
 }
 
 export async function getOrganization(organizationId: string): Promise<OrganizationDetails> {
-    const supabase = await createClient()
+    // 1. Vérification des permissions (tous les membres peuvent lire)
+    await requireOrgRole(organizationId)
 
-    const { data, error } = await supabase
+    // 2. Récupération des données (Admin Client pour contourner RLS)
+    const adminClient = createAdminClient() as any
+
+    const { data, error } = await adminClient
         .from('organizations')
         .select('id, name, slug, logo_url, brand_color, description, links, drive_folder_url')
         .eq('id', organizationId)
@@ -156,16 +163,15 @@ export async function updateOrganization(
         drive_folder_url?: string
     }
 ) {
-    const supabase = await createClient()
-
-    console.log('UPDATING Organization', organizationId, data)
-
-    // Vérification du rôle : admin requis
+    // 1. Vérification du rôle : admin requis
     const { role } = await requireOrgRole(organizationId)
     assertCanUpdateOrg(role)
 
-    const { error, data: updateData } = await (supabase
-        .from('organizations') as any)
+    // 2. Mise à jour (Admin Client pour contourner RLS)
+    const adminClient = createAdminClient() as any
+
+    const { error, data: updateData } = await adminClient
+        .from('organizations')
         .update({
             name: data.name,
             logo_url: data.logo_url,
@@ -173,11 +179,9 @@ export async function updateOrganization(
             description: data.description,
             links: data.links,
             drive_folder_url: data.drive_folder_url,
-        } as any)
+        })
         .eq('id', organizationId)
         .select()
-
-    console.log('Update result:', { error, updateData })
 
     if (error) {
         console.error('Supabase error details:', JSON.stringify(error, null, 2))

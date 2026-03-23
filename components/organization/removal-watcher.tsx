@@ -40,7 +40,9 @@ export function RemovalWatcher({ organizationId, organizationName }: RemovalWatc
                     .eq('user_id', userId)
                     .maybeSingle()
 
-                if (data === null) setRemoved(true)
+                // Si l'utilisateur n'est plus membre, afficher la modal
+                // Si l'utilisateur est de nouveau membre, masquer la modal
+                setRemoved(data === null)
             }
 
             // Vérification périodique + au focus de la fenêtre
@@ -60,7 +62,7 @@ export function RemovalWatcher({ organizationId, organizationName }: RemovalWatc
         setRedirecting(true)
         try {
             const orgs = await getUserOrganizations()
-            const other = orgs.find(o => o.id !== organizationId)
+            const other = orgs.find((o: { id: string }) => o.id !== organizationId)
             if (other) {
                 window.location.href = `/auth/set-org?orgId=${other.id}&next=/clients`
             } else {

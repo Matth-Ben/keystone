@@ -53,19 +53,19 @@ export async function exportSecretsToCsv(organizationId: string): Promise<Export
     // 2. Récupération des secrets (Admin Client pour contourner RLS)
     const adminClient = createAdminClient() as any
 
+    // Utiliser organization_id directement (left join pour inclure les secrets sans client)
     const { data: secrets, error } = await adminClient
         .from('secrets')
         .select(`
             *,
-            clients!inner (
+            clients (
                 id,
-                name,
-                organization_id
+                name
             )
         `)
-        .eq('clients.organization_id', organizationId)
+        .eq('organization_id', organizationId)
         .is('deleted_at', null)
-        .order('clients(name)', { ascending: true })
+        .order('created_at', { ascending: false })
 
     if (error) {
         console.error('Error exporting secrets:', error)
@@ -171,8 +171,8 @@ export async function validateCsvData(
 
     const { headers, rows } = parseCsv(csvContent)
 
-    // Vérification des colonnes requises
-    const requiredHeaders = ['client_name', 'type', 'title', 'password']
+    // Vérification des colonnes requises (client_name est maintenant optionnel)
+    const requiredHeaders = ['type', 'title', 'password']
     const missingHeaders = requiredHeaders.filter(h => !headers.includes(h))
 
     if (missingHeaders.length > 0) {
@@ -214,12 +214,7 @@ export async function validateCsvData(
         const title = getValue('title')
         const password = getValue('password')
 
-        // Validations
-        if (!clientName) {
-            errors.push(`Ligne ${lineNum}: client_name est requis`)
-            return
-        }
-
+        // Validations (client_name est maintenant optionnel)
         if (!title) {
             errors.push(`Ligne ${lineNum}: title est requis`)
             return
@@ -307,8 +302,8 @@ export async function importSecretsFromCsv(
     const createdClients: string[] = []
     let importedCount = 0
 
-    // Identifier les clients manquants
-    const uniqueClientNames = [...new Set(rows.map(r => r.client_name))]
+    // Identifier les clients manquants (ignorer les lignes sans client_name)
+    const uniqueClientNames = [...new Set(rows.map(r => r.client_name).filter(name => name && name.trim() !== ''))]
     const missingClients = uniqueClientNames.filter(name => !clientMap.has(name.toLowerCase()))
 
     if (missingClients.length > 0 && !createMissingClients) {
@@ -323,7 +318,7 @@ export async function importSecretsFromCsv(
     // Créer les clients manquants si demandé
     if (createMissingClients && missingClients.length > 0) {
         for (const clientName of missingClients) {
-            const { data: newClient, error: createError } = await supabase
+            const { data: newClient, error: createError } = await adminClient
                 .from('clients')
                 .insert({
                     organization_id: organizationId,
@@ -346,10 +341,14 @@ export async function importSecretsFromCsv(
         const row = rows[i]
         const lineNum = i + 2
 
-        const clientId = clientMap.get(row.client_name.toLowerCase())
-        if (!clientId) {
-            errors.push(`Ligne ${lineNum}: Client "${row.client_name}" non trouvé`)
-            continue
+        // Récupérer le client_id si un nom de client est fourni
+        let clientId: string | null = null
+        if (row.client_name && row.client_name.trim() !== '') {
+            clientId = clientMap.get(row.client_name.toLowerCase()) || null
+            if (!clientId) {
+                errors.push(`Ligne ${lineNum}: Client "${row.client_name}" non trouvé`)
+                continue
+            }
         }
 
         // Chiffrer le mot de passe
@@ -360,8 +359,9 @@ export async function importSecretsFromCsv(
             ? row.tags.split(',').map(t => t.trim()).filter(t => t !== '')
             : null
 
-        // Préparer les données du secret
+        // Préparer les données du secret (organization_id est maintenant requis)
         const secretData: any = {
+            organization_id: organizationId,
             client_id: clientId,
             type: row.type,
             title: row.title,
@@ -378,7 +378,7 @@ export async function importSecretsFromCsv(
         if (tags && tags.length > 0) secretData.tags = tags
         if (row.notes) secretData.notes = row.notes
 
-        const { error: insertError } = await supabase
+        const { error: insertError } = await adminClient
             .from('secrets')
             .insert(secretData)
 

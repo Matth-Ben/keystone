@@ -180,7 +180,8 @@ export interface Database {
             secrets: {
                 Row: {
                     id: string
-                    project_id: string
+                    organization_id: string
+                    client_id: string | null
                     type: Database['public']['Enums']['secret_type']
                     title: string
                     username: string | null
@@ -198,7 +199,8 @@ export interface Database {
                 }
                 Insert: {
                     id?: string
-                    project_id: string
+                    organization_id: string
+                    client_id?: string | null
                     type: Database['public']['Enums']['secret_type']
                     title: string
                     username?: string | null
@@ -216,7 +218,8 @@ export interface Database {
                 }
                 Update: {
                     id?: string
-                    project_id?: string
+                    organization_id?: string
+                    client_id?: string | null
                     type?: Database['public']['Enums']['secret_type']
                     title?: string
                     username?: string | null

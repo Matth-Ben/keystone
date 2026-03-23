@@ -182,12 +182,12 @@ export function CreateSecretDialog({
 
     async function onSubmit(values: z.infer<typeof formSchema>) {
         try {
-            const finalClientId = clientId || values.client_id
-
-            if (!finalClientId) {
-                form.setError('client_id', { message: 'Le client est requis' })
+            if (!currentOrganization) {
+                toast.error('Organisation non définie')
                 return
             }
+
+            const finalClientId = clientId || values.client_id || null
 
             if (!isEdit && !values.password) {
                 form.setError('password', { message: 'Le mot de passe est requis' })
@@ -196,6 +196,7 @@ export function CreateSecretDialog({
 
             const data = {
                 ...values,
+                organization_id: currentOrganization.id,
                 client_id: finalClientId,
                 type: values.type as SecretType,
                 port: values.port ? parseInt(values.port, 10) : undefined,
@@ -203,7 +204,7 @@ export function CreateSecretDialog({
 
             if (isEdit) {
                 // @ts-ignore
-                await updateSecret(secretToEdit.id, finalClientId, data)
+                await updateSecret(secretToEdit.id, data, finalClientId)
                 toast.success('Secret modifié')
             } else {
                 // @ts-ignore
@@ -249,7 +250,7 @@ export function CreateSecretDialog({
                                     name="client_id"
                                     render={({ field }) => (
                                         <FormItem className="flex flex-col">
-                                            <FormLabel>Client</FormLabel>
+                                            <FormLabel>Client <span className="text-muted-foreground font-normal">(optionnel)</span></FormLabel>
                                             <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
                                                 <PopoverTrigger asChild>
                                                     <FormControl>
