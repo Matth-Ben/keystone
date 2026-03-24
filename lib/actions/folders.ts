@@ -81,6 +81,53 @@ export async function getPersonalFolders(): Promise<SecretFolder[]> {
 }
 
 /**
+ * Get all folders accessible by the user (personal + organizations)
+ */
+export async function getAllUserFolders(): Promise<SecretFolder[]> {
+    const supabase = await createClient() as any
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('Non authentifié')
+
+    const adminClient = createAdminClient() as any
+
+    // Get user's organizations
+    const { data: memberships } = await adminClient
+        .from('organization_members')
+        .select('organization_id')
+        .eq('user_id', user.id)
+
+    const orgIds = memberships?.map((m: { organization_id: string }) => m.organization_id) || []
+
+    // Fetch personal folders + org folders in parallel
+    const queries: Promise<any>[] = [
+        // Personal folders
+        adminClient
+            .from('secret_folders')
+            .select('*')
+            .is('organization_id', null)
+            .eq('created_by', user.id)
+            .order('position', { ascending: true })
+    ]
+
+    if (orgIds.length > 0) {
+        queries.push(
+            adminClient
+                .from('secret_folders')
+                .select('*')
+                .in('organization_id', orgIds)
+                .order('position', { ascending: true })
+        )
+    }
+
+    const results = await Promise.all(queries)
+
+    const personalFolders = results[0].data || []
+    const orgFolders = results[1]?.data || []
+
+    return [...personalFolders, ...orgFolders] as SecretFolder[]
+}
+
+/**
  * Create a new folder (organization or personal)
  */
 export async function createFolder(data: CreateFolderData): Promise<SecretFolder> {

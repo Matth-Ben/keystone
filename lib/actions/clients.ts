@@ -1,6 +1,7 @@
 'use server'
 
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createClient as createSupabaseClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { requireOrgRole, assertCanWrite, assertCanDelete } from '@/lib/rbac'
 
@@ -37,6 +38,42 @@ export async function getClients(organizationId: string, query?: string) {
 
     if (error) {
         console.error('Error fetching clients:', error)
+        throw new Error('Erreur lors de la récupération des clients')
+    }
+
+    return clients as Client[]
+}
+
+/**
+ * Get all clients from all organizations the user belongs to
+ */
+export async function getAllUserClients(): Promise<Client[]> {
+    const supabase = await createSupabaseClient() as any
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('Non authentifié')
+
+    const adminClient = createAdminClient() as any
+
+    // Get user's organizations
+    const { data: memberships } = await adminClient
+        .from('organization_members')
+        .select('organization_id')
+        .eq('user_id', user.id)
+
+    const orgIds = memberships?.map((m: { organization_id: string }) => m.organization_id) || []
+
+    if (orgIds.length === 0) {
+        return []
+    }
+
+    const { data: clients, error } = await adminClient
+        .from('clients')
+        .select('*')
+        .in('organization_id', orgIds)
+        .order('name', { ascending: true })
+
+    if (error) {
+        console.error('Error fetching all user clients:', error)
         throw new Error('Erreur lors de la récupération des clients')
     }
 

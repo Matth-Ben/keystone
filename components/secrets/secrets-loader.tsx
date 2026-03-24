@@ -1,7 +1,7 @@
 import { getAllSecrets, getAllUserSecrets } from '@/lib/actions/secrets'
 import { getOrganizationCookie } from '@/lib/actions/organization-cookie'
-import { getFolders, getPersonalFolders } from '@/lib/actions/folders'
-import { getClients } from '@/lib/actions/clients'
+import { getFolders, getAllUserFolders } from '@/lib/actions/folders'
+import { getClients, getAllUserClients } from '@/lib/actions/clients'
 import { SecretsPageContent } from '@/components/secrets/secrets-page-content'
 
 export async function SecretsLoader() {
@@ -25,17 +25,18 @@ export async function SecretsLoader() {
             />
         )
     } else {
-        // Mode personnel : secrets personnels + dossiers personnels
-        const [secrets, folders] = await Promise.all([
+        // Mode "Tous mes secrets" : secrets personnels + orgs, dossiers personnels + orgs, clients des orgs
+        const [secrets, folders, clients] = await Promise.all([
             getAllUserSecrets(),
-            getPersonalFolders()
+            getAllUserFolders(),
+            getAllUserClients()
         ])
 
         return (
             <SecretsPageContent
                 secrets={secrets}
                 folders={folders}
-                clients={[]}
+                clients={clients}
                 organizationId={null}
                 role="admin"
             />
