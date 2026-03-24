@@ -12,6 +12,7 @@ export interface Secret {
     id: string
     organization_id: string | null
     client_id: string | null
+    folder_id: string | null
     type: SecretType
     title: string
     username?: string | null
@@ -30,6 +31,7 @@ export interface Secret {
 export interface SecretFormData {
     organization_id?: string | null
     client_id?: string | null
+    folder_id?: string | null
     type: SecretType
     title: string
     password?: string // Optionnel en édition
@@ -47,6 +49,7 @@ const SECRET_LIST_COLUMNS = `
     id,
     organization_id,
     client_id,
+    folder_id,
     type,
     title,
     username,
@@ -279,6 +282,7 @@ export async function createSecret(data: SecretFormData) {
         .insert({
             organization_id: data.organization_id || null,
             client_id: data.client_id || null,
+            folder_id: data.folder_id || null,
             type: data.type,
             title: data.title,
             encrypted_password,
@@ -406,6 +410,7 @@ export async function updateSecret(secretId: string, data: Partial<SecretFormDat
         tags: data.tags,
         notes: data.notes,
         client_id: data.client_id === undefined ? undefined : (data.client_id || null),
+        folder_id: data.folder_id === undefined ? undefined : (data.folder_id || null),
         updated_at: new Date().toISOString()
     }
 

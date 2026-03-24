@@ -19,7 +19,7 @@ export default async function SecretsPage() {
                 </h1>
                 <p className="text-muted-foreground">
                     {organizationId
-                        ? 'Accédez à l\'ensemble des secrets de vos clients en un seul endroit.'
+                        ? 'Organisez et accédez à vos secrets par dossiers et clients.'
                         : 'Vos secrets personnels et ceux de vos organisations.'}
                 </p>
             </div>

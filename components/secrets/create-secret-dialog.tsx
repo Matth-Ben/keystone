@@ -191,11 +191,17 @@ export function CreateSecretDialog({
             }
 
             const data = {
-                ...values,
                 organization_id: currentOrganization?.id || null,
                 client_id: finalClientId,
                 type: values.type as SecretType,
+                title: values.title,
+                password: values.password,
+                username: values.username || undefined,
+                host: values.host || undefined,
                 port: values.port ? parseInt(values.port, 10) : undefined,
+                url: values.url || undefined,
+                db_name: values.db_name || undefined,
+                notes: values.notes || undefined,
             }
 
             if (isEdit) {

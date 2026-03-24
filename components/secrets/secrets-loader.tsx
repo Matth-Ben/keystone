@@ -1,23 +1,34 @@
 import { getAllSecrets, getAllUserSecrets } from '@/lib/actions/secrets'
 import { getOrganizationCookie } from '@/lib/actions/organization-cookie'
+import { getFolders } from '@/lib/actions/folders'
+import { getClients } from '@/lib/actions/clients'
 import { SecretList } from '@/components/secrets/secret-list'
+import { SecretsPageContent } from '@/components/secrets/secrets-page-content'
 import { type OrgRole } from '@/lib/rbac'
 
 export async function SecretsLoader() {
     const organizationId = await getOrganizationCookie()
-    let secrets: any[] = []
-    let role: OrgRole = 'admin' // Mode personnel = contrôle total
 
     if (organizationId) {
-        // Mode organisation : getAllSecrets retourne secrets + role en une seule opération
-        const result = await getAllSecrets(organizationId)
-        secrets = result.secrets
-        role = result.role
-    } else {
-        // Mode personnel : tous les secrets de l'utilisateur
-        secrets = await getAllUserSecrets()
-        role = 'admin' // Contrôle total sur ses secrets personnels
-    }
+        // Mode organisation : charger secrets, dossiers et clients en parallèle
+        const [secretsResult, foldersResult, clientsResult] = await Promise.all([
+            getAllSecrets(organizationId),
+            getFolders(organizationId),
+            getClients(organizationId)
+        ])
 
-    return <SecretList secrets={secrets} role={role} />
+        return (
+            <SecretsPageContent
+                secrets={secretsResult.secrets}
+                folders={foldersResult}
+                clients={clientsResult}
+                organizationId={organizationId}
+                role={secretsResult.role}
+            />
+        )
+    } else {
+        // Mode personnel : pas de dossiers, affichage simple
+        const secrets = await getAllUserSecrets()
+        return <SecretList secrets={secrets} role="admin" />
+    }
 }
