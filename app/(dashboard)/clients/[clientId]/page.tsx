@@ -74,7 +74,7 @@ export default async function ClientPage({ params }: PageProps) {
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
-                    <RecentTracker type="client" id={client.id} name={client.name} />
+                    <RecentTracker type="client" id={client.id} name={client.name} organizationId={client.organization_id} />
                     <ClientActions client={client} role={role} />
                 </div>
             </div>

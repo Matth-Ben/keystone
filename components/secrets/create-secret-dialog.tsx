@@ -182,12 +182,8 @@ export function CreateSecretDialog({
 
     async function onSubmit(values: z.infer<typeof formSchema>) {
         try {
-            if (!currentOrganization) {
-                toast.error('Organisation non définie')
-                return
-            }
-
-            const finalClientId = clientId || values.client_id || null
+            // Client uniquement si une organisation est sélectionnée
+            const finalClientId = currentOrganization ? (clientId || values.client_id || null) : null
 
             if (!isEdit && !values.password) {
                 form.setError('password', { message: 'Le mot de passe est requis' })
@@ -196,7 +192,7 @@ export function CreateSecretDialog({
 
             const data = {
                 ...values,
-                organization_id: currentOrganization.id,
+                organization_id: currentOrganization?.id || null,
                 client_id: finalClientId,
                 type: values.type as SecretType,
                 port: values.port ? parseInt(values.port, 10) : undefined,
@@ -209,7 +205,7 @@ export function CreateSecretDialog({
             } else {
                 // @ts-ignore
                 await createSecret(data)
-                toast.success('Secret créé')
+                toast.success(currentOrganization ? 'Secret créé' : 'Secret personnel créé')
             }
             onOpenChange(false)
         } catch (error: any) {
@@ -233,17 +229,21 @@ export function CreateSecretDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
-                    <DialogTitle>{isEdit ? 'Modifier le secret' : 'Nouveau Secret'}</DialogTitle>
+                    <DialogTitle>
+                        {isEdit ? 'Modifier le secret' : (currentOrganization ? 'Nouveau Secret' : 'Nouveau Secret Personnel')}
+                    </DialogTitle>
                     <DialogDescription>
-                        Ajoutez des identifiants ou clés API sécurisés.
+                        {currentOrganization
+                            ? 'Ajoutez des identifiants ou clés API sécurisés.'
+                            : 'Ce secret sera personnel et visible uniquement par vous.'}
                     </DialogDescription>
                 </DialogHeader>
 
                 <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
 
-                        {/* Sélection du client si non fourni */}
-                        {!clientId && (
+                        {/* Sélection du client si organisation sélectionnée et non fourni */}
+                        {currentOrganization && !clientId && (
                             <div className="space-y-2">
                                 <FormField
                                     control={form.control}

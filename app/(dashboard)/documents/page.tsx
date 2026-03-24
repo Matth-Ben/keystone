@@ -14,8 +14,9 @@ export const metadata = {
 export default async function DocumentsPage() {
     const organizationId = await getOrganizationCookie()
 
+    // Cette page nécessite une organisation
     if (!organizationId) {
-        redirect('/')
+        redirect('/secrets')
     }
 
     try {

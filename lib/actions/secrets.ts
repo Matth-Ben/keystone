@@ -10,7 +10,7 @@ export type SecretType = 'ssh' | 'ftp' | 'db' | 'cms' | 'api' | 'other'
 
 export interface Secret {
     id: string
-    organization_id: string
+    organization_id: string | null
     client_id: string | null
     type: SecretType
     title: string
@@ -23,11 +23,12 @@ export interface Secret {
     notes?: string | null
     created_at: string
     updated_at: string
+    created_by?: string
 }
 
 // Schéma pour la création/édition
 export interface SecretFormData {
-    organization_id: string
+    organization_id?: string | null
     client_id?: string | null
     type: SecretType
     title: string
@@ -41,33 +42,116 @@ export interface SecretFormData {
     notes?: string
 }
 
-export async function getAllSecrets(organizationId: string): Promise<(Secret & { clients: { name: string } | null })[]> {
-    // 1. Vérification sécurité (tous les membres de l'org peuvent lire)
-    await requireOrgRole(organizationId)
+// Colonnes nécessaires pour l'affichage et l'édition des secrets
+const SECRET_LIST_COLUMNS = `
+    id,
+    organization_id,
+    client_id,
+    type,
+    title,
+    username,
+    host,
+    port,
+    url,
+    db_name,
+    notes,
+    created_at,
+    clients (
+        id,
+        name
+    )
+`
 
-    // 2. Récupération données (Admin Client pour contourner RLS)
+export async function getAllSecrets(organizationId: string): Promise<{
+    secrets: (Secret & { clients: { name: string } | null })[]
+    role: import('@/lib/rbac').OrgRole
+}> {
     const adminClient = createAdminClient() as any
 
-    // Utiliser organization_id directement (left join pour inclure les secrets sans client)
-    const { data, error } = await adminClient
-        .from('secrets')
-        .select(`
-            *,
-            clients (
-                id,
-                name
-            )
-        `)
-        .eq('organization_id', organizationId)
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false })
+    // Paralléliser : vérification du rôle + récupération des secrets
+    const [membership, secretsResult] = await Promise.all([
+        requireOrgRole(organizationId),
+        adminClient
+            .from('secrets')
+            .select(SECRET_LIST_COLUMNS)
+            .eq('organization_id', organizationId)
+            .is('deleted_at', null)
+            .order('created_at', { ascending: false })
+    ])
 
-    if (error) {
-        console.error('Error fetching all secrets:', error)
+    if (secretsResult.error) {
+        console.error('Error fetching all secrets:', secretsResult.error)
         throw new Error('Erreur lors du chargement des secrets')
     }
 
-    return data as (Secret & { clients: { name: string } | null })[]
+    return {
+        secrets: secretsResult.data as (Secret & { clients: { name: string } | null })[],
+        role: membership.role
+    }
+}
+
+// Récupérer tous les secrets de l'utilisateur (personnels + organisations)
+export async function getAllUserSecrets(): Promise<(Secret & { clients: { name: string } | null })[]> {
+    // 1. Authentification
+    const supabase = await createClient() as any
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) throw new Error('Non authentifié')
+
+    const adminClient = createAdminClient() as any
+
+    // 2. Récupérer les organisations de l'utilisateur
+    const { data: memberships } = await adminClient
+        .from('organization_members')
+        .select('organization_id')
+        .eq('user_id', user.id)
+
+    const orgIds = memberships?.map((m: { organization_id: string }) => m.organization_id) || []
+
+    // 3. Paralléliser : secrets personnels + secrets des organisations
+    const queries: Promise<any>[] = [
+        // Secrets personnels
+        adminClient
+            .from('secrets')
+            .select(SECRET_LIST_COLUMNS)
+            .is('organization_id', null)
+            .eq('created_by', user.id)
+            .is('deleted_at', null)
+    ]
+
+    // Secrets des organisations (si l'utilisateur en a)
+    if (orgIds.length > 0) {
+        queries.push(
+            adminClient
+                .from('secrets')
+                .select(SECRET_LIST_COLUMNS)
+                .in('organization_id', orgIds)
+                .is('deleted_at', null)
+        )
+    }
+
+    const results = await Promise.all(queries)
+
+    const personalResult = results[0]
+    if (personalResult.error) {
+        console.error('Error fetching personal secrets:', personalResult.error)
+        throw new Error('Erreur lors du chargement des secrets personnels')
+    }
+
+    let orgSecrets: any[] = []
+    if (results[1]) {
+        if (results[1].error) {
+            console.error('Error fetching org secrets:', results[1].error)
+            throw new Error('Erreur lors du chargement des secrets')
+        }
+        orgSecrets = results[1].data || []
+    }
+
+    // 4. Combiner et trier par date de création
+    const allSecrets = [...(personalResult.data || []), ...orgSecrets]
+    allSecrets.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+
+    return allSecrets as (Secret & { clients: { name: string } | null })[]
 }
 
 export async function getSecrets(clientId: string): Promise<Secret[]> {
@@ -94,9 +178,10 @@ export async function getSecrets(clientId: string): Promise<Secret[]> {
 }
 
 export async function getSecretDetails(secretId: string): Promise<Secret> {
-    // 1. Vérifier que l'utilisateur a accès à l'organisation du secret
-    const orgId = await getOrgIdFromSecret(secretId)
-    await requireOrgRole(orgId)
+    // 1. Authentification
+    const supabase = await createClient() as any
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('Non authentifié')
 
     // 2. Récupération données (Admin Client pour contourner RLS)
     const adminClient = createAdminClient() as any
@@ -109,6 +194,17 @@ export async function getSecretDetails(secretId: string): Promise<Secret> {
 
     if (error || !data) {
         throw new Error('Secret introuvable')
+    }
+
+    // 3. Vérification d'accès
+    if (!data.organization_id) {
+        // Secret personnel : vérifier que l'utilisateur est le créateur
+        if (data.created_by !== user.id) {
+            throw new Error('Accès non autorisé')
+        }
+    } else {
+        // Secret d'organisation : vérifier l'appartenance
+        await requireOrgRole(data.organization_id)
     }
 
     return data as Secret
@@ -125,15 +221,38 @@ async function getOrgIdFromClient(clientId: string): Promise<string> {
     return data.organization_id
 }
 
-async function getOrgIdFromSecret(secretId: string): Promise<string> {
+async function getOrgIdFromSecret(secretId: string): Promise<string | null> {
     const adminClient = createAdminClient() as any
     const { data, error } = await adminClient
         .from('secrets')
-        .select('organization_id')
+        .select('organization_id, created_by')
         .eq('id', secretId)
         .single()
     if (error || !data) throw new Error('Secret introuvable')
     return data.organization_id
+}
+
+// Vérifie si l'utilisateur peut accéder à un secret (personnel ou via organisation)
+async function assertSecretAccess(secretId: string, userId: string): Promise<{ isPersonal: boolean; orgId: string | null }> {
+    const adminClient = createAdminClient() as any
+    const { data, error } = await adminClient
+        .from('secrets')
+        .select('organization_id, created_by')
+        .eq('id', secretId)
+        .single()
+
+    if (error || !data) throw new Error('Secret introuvable')
+
+    // Secret personnel : l'utilisateur doit être le créateur
+    if (!data.organization_id) {
+        if (data.created_by !== userId) {
+            throw new Error('Accès non autorisé')
+        }
+        return { isPersonal: true, orgId: null }
+    }
+
+    // Secret d'organisation : vérification via requireOrgRole
+    return { isPersonal: false, orgId: data.organization_id }
 }
 
 export async function createSecret(data: SecretFormData) {
@@ -144,9 +263,12 @@ export async function createSecret(data: SecretFormData) {
     if (!user) throw new Error('Non authentifié')
     if (!data.password) throw new Error('Le mot de passe/clé est requis')
 
-    // 2. Vérification du rôle (utiliser organization_id directement)
-    const { role } = await requireOrgRole(data.organization_id)
-    assertCanWrite(role)
+    // 2. Vérification du rôle (seulement si organization_id est fourni)
+    if (data.organization_id) {
+        const { role } = await requireOrgRole(data.organization_id)
+        assertCanWrite(role)
+    }
+    // Si pas d'organization_id, c'est un secret personnel - pas de vérification de rôle
 
     // 3. Création (Admin Client pour contourner RLS)
     const adminClient = createAdminClient() as any
@@ -155,7 +277,7 @@ export async function createSecret(data: SecretFormData) {
     const { error } = await adminClient
         .from('secrets')
         .insert({
-            organization_id: data.organization_id,
+            organization_id: data.organization_id || null,
             client_id: data.client_id || null,
             type: data.type,
             title: data.title,
@@ -182,14 +304,24 @@ export async function createSecret(data: SecretFormData) {
 }
 
 export async function revealSecret(secretId: string): Promise<string> {
-    // 1. Vérification du rôle (les Lecteurs ne peuvent pas révéler)
-    const orgId = await getOrgIdFromSecret(secretId)
-    const { role } = await requireOrgRole(orgId)
-    assertCanRevealSecrets(role)
+    // 1. Authentification
+    const supabase = await createClient() as any
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('Non authentifié')
+
+    // 2. Vérification d'accès
+    const { isPersonal, orgId } = await assertSecretAccess(secretId, user.id)
+
+    // Pour les secrets d'organisation, vérifier le rôle (les Lecteurs ne peuvent pas révéler)
+    if (!isPersonal && orgId) {
+        const { role } = await requireOrgRole(orgId)
+        assertCanRevealSecrets(role)
+    }
+    // Pour les secrets personnels, l'utilisateur a le contrôle total
 
     // TODO: Ajouter un log d'audit ici ("User X revealed Secret Y")
 
-    // 2. Récupération données (Admin Client pour contourner RLS)
+    // 3. Récupération données (Admin Client pour contourner RLS)
     const adminClient = createAdminClient() as any
 
     const { data, error } = await adminClient
@@ -211,12 +343,22 @@ export async function revealSecret(secretId: string): Promise<string> {
 }
 
 export async function deleteSecret(secretId: string, clientId?: string | null) {
-    // 1. Vérification du rôle (admin seulement) - utiliser organization_id du secret
-    const orgId = await getOrgIdFromSecret(secretId)
-    const { role } = await requireOrgRole(orgId)
-    assertCanDelete(role)
+    // 1. Authentification
+    const supabase = await createClient() as any
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('Non authentifié')
 
-    // 2. Soft delete (Admin Client pour contourner RLS)
+    // 2. Vérification d'accès
+    const { isPersonal, orgId } = await assertSecretAccess(secretId, user.id)
+
+    // Pour les secrets d'organisation, vérifier le rôle (admin seulement)
+    if (!isPersonal && orgId) {
+        const { role } = await requireOrgRole(orgId)
+        assertCanDelete(role)
+    }
+    // Pour les secrets personnels, l'utilisateur a le contrôle total
+
+    // 3. Soft delete (Admin Client pour contourner RLS)
     const adminClient = createAdminClient() as any
 
     const { error } = await adminClient
@@ -235,12 +377,22 @@ export async function deleteSecret(secretId: string, clientId?: string | null) {
 }
 
 export async function updateSecret(secretId: string, data: Partial<SecretFormData>, clientId?: string | null) {
-    // 1. Vérification du rôle - utiliser organization_id du secret
-    const orgId = await getOrgIdFromSecret(secretId)
-    const { role } = await requireOrgRole(orgId)
-    assertCanWrite(role)
+    // 1. Authentification
+    const supabase = await createClient() as any
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('Non authentifié')
 
-    // 2. Mise à jour (Admin Client pour contourner RLS)
+    // 2. Vérification d'accès
+    const { isPersonal, orgId } = await assertSecretAccess(secretId, user.id)
+
+    // Pour les secrets d'organisation, vérifier le rôle
+    if (!isPersonal && orgId) {
+        const { role } = await requireOrgRole(orgId)
+        assertCanWrite(role)
+    }
+    // Pour les secrets personnels, l'utilisateur a le contrôle total
+
+    // 3. Mise à jour (Admin Client pour contourner RLS)
     const adminClient = createAdminClient() as any
 
     const updateData: any = {

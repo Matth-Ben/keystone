@@ -7,9 +7,10 @@ interface RecentTrackerProps {
     type: 'client' | 'project'
     id: string
     name: string
+    organizationId?: string | null
 }
 
-export function RecentTracker({ type, id, name }: RecentTrackerProps) {
+export function RecentTracker({ type, id, name, organizationId }: RecentTrackerProps) {
     const { addRecent } = useAppStore()
 
     useEffect(() => {
@@ -18,8 +19,9 @@ export function RecentTracker({ type, id, name }: RecentTrackerProps) {
             id,
             name,
             timestamp: Date.now(),
+            organizationId: organizationId || null,
         })
-    }, [type, id, name, addRecent])
+    }, [type, id, name, organizationId, addRecent])
 
     return null
 }

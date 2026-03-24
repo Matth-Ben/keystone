@@ -15,6 +15,7 @@ interface Favorite {
     resource_type: 'client' | 'project'
     resource_id: string
     resource_name: string
+    organization_id: string | null
 }
 
 interface Recent {
@@ -22,6 +23,7 @@ interface Recent {
     id: string
     name: string
     timestamp: number
+    organizationId?: string | null
 }
 
 interface UserProfile {
@@ -45,6 +47,7 @@ interface AppStore {
     // Récents (max 10 items)
     recents: Recent[]
     addRecent: (item: Recent) => void
+    removeRecent: (type: string, id: string) => void
     clearRecents: () => void
 
     // Sidebar state (mobile)
@@ -89,6 +92,10 @@ export const useAppStore = create<AppStore>()(
                     // Limiter à 10 items
                     return { recents: newRecents.slice(0, 10) }
                 }),
+            removeRecent: (type, id) =>
+                set((state) => ({
+                    recents: state.recents.filter((r) => !(r.type === type && r.id === id)),
+                })),
             clearRecents: () => set({ recents: [] }),
 
             // Sidebar

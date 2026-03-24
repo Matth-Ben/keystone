@@ -1,11 +1,17 @@
 'use client'
 
 import { useState } from 'react'
-import { Building2 } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Building2, ArrowRight } from 'lucide-react'
 import { CreateOrganizationDialog } from '@/components/dashboard/create-organization-dialog'
 
 export function OnboardingView() {
     const [dialogOpen, setDialogOpen] = useState(false)
+    const router = useRouter()
+
+    const handleSkip = () => {
+        router.push('/secrets')
+    }
 
     return (
         <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 p-4">
@@ -20,10 +26,10 @@ export function OnboardingView() {
                 {/* Titre */}
                 <div className="space-y-2">
                     <h1 className="text-3xl font-bold tracking-tight">
-                        Bienvenue sur Keystone ! 👋
+                        Bienvenue sur Keystone !
                     </h1>
                     <p className="text-muted-foreground">
-                        Pour commencer, créez votre première organisation
+                        Créez une organisation ou utilisez vos secrets personnels
                     </p>
                 </div>
 
@@ -41,19 +47,26 @@ export function OnboardingView() {
                         </div>
                     </div>
 
-                    <div className="pt-4">
+                    <div className="pt-4 space-y-3">
                         <button
                             onClick={() => setDialogOpen(true)}
                             className="w-full rounded-lg bg-primary px-4 py-3 font-medium text-primary-foreground transition-colors hover:bg-primary/90"
                         >
                             Créer mon organisation
                         </button>
+                        <button
+                            onClick={handleSkip}
+                            className="w-full flex items-center justify-center gap-2 rounded-lg border border-input bg-background px-4 py-3 font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                        >
+                            Continuer sans organisation
+                            <ArrowRight className="h-4 w-4" />
+                        </button>
                     </div>
                 </div>
 
                 {/* Info */}
                 <p className="text-xs text-muted-foreground">
-                    Vous pourrez inviter des membres et gérer les permissions plus tard
+                    Vous pouvez créer une organisation à tout moment depuis l'application
                 </p>
             </div>
 

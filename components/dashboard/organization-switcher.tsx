@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { Check, ChevronsUpDown, Plus } from 'lucide-react'
+import { useRouter, usePathname } from 'next/navigation'
+import { Check, ChevronsUpDown, Plus, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
     Command,
@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/popover'
 import { useAppStore, type Organization } from '@/lib/store/app-store'
 import { getUserOrganizations } from '@/lib/actions/organizations'
-import { setOrganizationCookie } from '@/lib/actions/organization-cookie'
+import { setOrganizationCookie, clearOrganizationCookie } from '@/lib/actions/organization-cookie'
 import { CreateOrganizationDialog } from './create-organization-dialog'
 import { toast } from 'sonner'
 
@@ -39,6 +39,10 @@ export function OrganizationSwitcher({
     const [loading, setLoading] = useState(initialOrganizations.length === 0)
     const { currentOrganization, setCurrentOrganization } = useAppStore()
     const router = useRouter()
+    const pathname = usePathname()
+
+    // Pages qui nécessitent une organisation
+    const orgRequiredPaths = ['/clients', '/documents', '/organization']
 
     // Determine which organization to display:
     // 1. Store value (if hydrated)
@@ -89,6 +93,26 @@ export function OrganizationSwitcher({
         router.refresh()
     }
 
+    const handleSelectAllSecrets = async () => {
+        setCurrentOrganization(null)
+        await clearOrganizationCookie()
+        setOpen(false)
+        toast.success('Mode personnel activé', {
+            description: 'Vous voyez maintenant tous vos secrets',
+        })
+
+        // Rediriger vers /secrets si on est sur une page qui nécessite une organisation
+        const needsRedirect = orgRequiredPaths.some(path =>
+            pathname === path || pathname.startsWith(path + '/')
+        )
+
+        if (needsRedirect) {
+            router.push('/secrets')
+        } else {
+            router.refresh()
+        }
+    }
+
     const handleCreateOrganization = () => {
         setOpen(false)
         setCreateDialogOpen(true)
@@ -110,26 +134,8 @@ export function OrganizationSwitcher({
         )
     }
 
-    if (organizations.length === 0) {
-        return (
-            <>
-                <Button
-                    variant="outline"
-                    className="w-full justify-start"
-                    onClick={handleCreateOrganization}
-                >
-                    <Plus className="mr-2 h-4 w-4" />
-                    Créer une organisation
-                </Button>
-
-                <CreateOrganizationDialog
-                    open={createDialogOpen}
-                    onOpenChange={setCreateDialogOpen}
-                    onSuccess={handleOrganizationCreated}
-                />
-            </>
-        )
-    }
+    // Même sans organisation, on affiche le switcher pour permettre
+    // d'utiliser le mode "Tous mes secrets" et de créer une org si besoin
 
     return (
         <>
@@ -142,27 +148,38 @@ export function OrganizationSwitcher({
                         className="w-full justify-between"
                     >
                         <div className="flex items-center gap-2 truncate">
-                            <div
-                                className="flex h-6 w-6 items-center justify-center rounded text-xs font-semibold overflow-hidden relative"
-                                style={{
-                                    backgroundColor: displayOrganization?.brand_color || 'hsl(var(--primary))',
-                                    color: displayOrganization?.brand_color ? '#fff' : 'hsl(var(--primary-foreground))'
-                                }}
-                            >
-                                {displayOrganization?.logo_url ? (
-                                    <>
-                                        <div className="absolute inset-0 bg-white/90 rounded" />
-                                        <img
-                                            src={displayOrganization.logo_url}
-                                            alt={displayOrganization.name}
-                                            className="h-full w-full object-contain p-1 relative z-10"
-                                        />
-                                    </>
-                                ) : (
-                                    displayOrganization?.name.charAt(0).toUpperCase()
-                                )}
-                            </div>
-                            <span className="truncate">{displayOrganization?.name || 'Sélectionner...'}</span>
+                            {displayOrganization ? (
+                                <>
+                                    <div
+                                        className="flex h-6 w-6 items-center justify-center rounded text-xs font-semibold overflow-hidden relative"
+                                        style={{
+                                            backgroundColor: displayOrganization.brand_color || 'hsl(var(--primary))',
+                                            color: displayOrganization.brand_color ? '#fff' : 'hsl(var(--primary-foreground))'
+                                        }}
+                                    >
+                                        {displayOrganization.logo_url ? (
+                                            <>
+                                                <div className="absolute inset-0 bg-white/90 rounded" />
+                                                <img
+                                                    src={displayOrganization.logo_url}
+                                                    alt={displayOrganization.name}
+                                                    className="h-full w-full object-contain p-1 relative z-10"
+                                                />
+                                            </>
+                                        ) : (
+                                            displayOrganization.name.charAt(0).toUpperCase()
+                                        )}
+                                    </div>
+                                    <span className="truncate">{displayOrganization.name}</span>
+                                </>
+                            ) : (
+                                <>
+                                    <div className="flex h-6 w-6 items-center justify-center rounded bg-gradient-to-br from-violet-500 to-purple-600 text-white">
+                                        <Sparkles className="h-3.5 w-3.5" />
+                                    </div>
+                                    <span className="truncate">Tous mes secrets</span>
+                                </>
+                            )}
                         </div>
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
@@ -172,48 +189,72 @@ export function OrganizationSwitcher({
                         <CommandInput placeholder="Rechercher une organisation..." />
                         <CommandList>
                             <CommandEmpty>Aucune organisation trouvée.</CommandEmpty>
-                            <CommandGroup heading="Organisations">
-                                {organizations.map((org) => (
-                                    <CommandItem
-                                        key={org.id}
-                                        onSelect={() => handleSelectOrganization(org)}
-                                        className="cursor-pointer"
-                                    >
-                                        <Check
-                                            className={`mr-2 h-4 w-4 ${currentOrganization?.id === org.id
-                                                ? 'opacity-100'
-                                                : 'opacity-0'
-                                                }`}
-                                        />
-                                        <div
-                                            className="flex h-5 w-5 items-center justify-center rounded text-xs font-semibold overflow-hidden mr-2 relative"
-                                            style={{
-                                                backgroundColor: org.brand_color || 'hsl(var(--primary))',
-                                                color: org.brand_color ? '#fff' : 'hsl(var(--primary-foreground))'
-                                            }}
-                                        >
-                                            {org.logo_url ? (
-                                                <>
-                                                    <div className="absolute inset-0 bg-white/90 rounded" />
-                                                    <img
-                                                        src={org.logo_url}
-                                                        alt={org.name}
-                                                        className="h-full w-full object-contain relative z-10"
-                                                    />
-                                                </>
-                                            ) : (
-                                                org.name.charAt(0).toUpperCase()
-                                            )}
-                                        </div>
-                                        <div className="flex flex-1 items-center justify-between">
-                                            <span>{org.name}</span>
-                                            <span className="text-xs text-muted-foreground capitalize">
-                                                {org.role}
-                                            </span>
-                                        </div>
-                                    </CommandItem>
-                                ))}
+                            <CommandGroup>
+                                <CommandItem
+                                    onSelect={handleSelectAllSecrets}
+                                    className="cursor-pointer"
+                                >
+                                    <Check
+                                        className={`mr-2 h-4 w-4 ${!currentOrganization ? 'opacity-100' : 'opacity-0'}`}
+                                    />
+                                    <div className="flex h-5 w-5 items-center justify-center rounded bg-gradient-to-br from-violet-500 to-purple-600 text-white mr-2">
+                                        <Sparkles className="h-3 w-3" />
+                                    </div>
+                                    <div className="flex flex-1 items-center justify-between">
+                                        <span>Tous mes secrets</span>
+                                        <span className="text-xs text-muted-foreground">
+                                            Personnel
+                                        </span>
+                                    </div>
+                                </CommandItem>
                             </CommandGroup>
+                            {organizations.length > 0 && (
+                                <>
+                                    <CommandSeparator />
+                                    <CommandGroup heading="Organisations">
+                                        {organizations.map((org) => (
+                                            <CommandItem
+                                                key={org.id}
+                                                onSelect={() => handleSelectOrganization(org)}
+                                                className="cursor-pointer"
+                                            >
+                                                <Check
+                                                    className={`mr-2 h-4 w-4 ${currentOrganization?.id === org.id
+                                                        ? 'opacity-100'
+                                                        : 'opacity-0'
+                                                        }`}
+                                                />
+                                                <div
+                                                    className="flex h-5 w-5 items-center justify-center rounded text-xs font-semibold overflow-hidden mr-2 relative"
+                                                    style={{
+                                                        backgroundColor: org.brand_color || 'hsl(var(--primary))',
+                                                        color: org.brand_color ? '#fff' : 'hsl(var(--primary-foreground))'
+                                                    }}
+                                                >
+                                                    {org.logo_url ? (
+                                                        <>
+                                                            <div className="absolute inset-0 bg-white/90 rounded" />
+                                                            <img
+                                                                src={org.logo_url}
+                                                                alt={org.name}
+                                                                className="h-full w-full object-contain relative z-10"
+                                                            />
+                                                        </>
+                                                    ) : (
+                                                        org.name.charAt(0).toUpperCase()
+                                                    )}
+                                                </div>
+                                                <div className="flex flex-1 items-center justify-between">
+                                                    <span>{org.name}</span>
+                                                    <span className="text-xs text-muted-foreground capitalize">
+                                                        {org.role}
+                                                    </span>
+                                                </div>
+                                            </CommandItem>
+                                        ))}
+                                    </CommandGroup>
+                                </>
+                            )}
                             <CommandSeparator />
                             <CommandGroup>
                                 <CommandItem onSelect={handleCreateOrganization} className="cursor-pointer">

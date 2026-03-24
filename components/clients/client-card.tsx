@@ -64,7 +64,8 @@ export function ClientCard({ client }: ClientCardProps) {
                         id: result.id,
                         resource_type: 'client',
                         resource_id: client.id,
-                        resource_name: client.name
+                        resource_name: client.name,
+                        organization_id: client.organization_id,
                     })
                 }
             }

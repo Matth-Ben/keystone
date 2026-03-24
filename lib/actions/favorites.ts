@@ -32,25 +32,44 @@ export async function getFavorites() {
     // Utiliser le client admin pour récupérer les noms (contourner RLS)
     const adminClient = createAdminClient()
 
-    // Pour chaque favori, récupérer le nom de la ressource
-    const favoritesWithNames = await Promise.all(
+    // Pour chaque favori, récupérer le nom et l'organization_id de la ressource
+    // Filtrer les ressources supprimées
+    const favoritesWithDetails = await Promise.all(
         favorites.map(async (fav: any) => {
             let resourceName = 'Unknown'
+            let organizationId: string | null = null
+            let exists = false
 
             if (fav.resource_type === 'client') {
                 const { data: client } = await adminClient
                     .from('clients')
-                    .select('name')
+                    .select('name, organization_id, deleted_at')
                     .eq('id', fav.resource_id)
                     .single()
-                resourceName = client?.name || 'Client inconnu'
+
+                if (client && !client.deleted_at) {
+                    resourceName = client.name
+                    organizationId = client.organization_id
+                    exists = true
+                }
             } else if (fav.resource_type === 'project') {
                 const { data: project } = await adminClient
                     .from('projects')
-                    .select('name')
+                    .select('name, organization_id, deleted_at')
                     .eq('id', fav.resource_id)
                     .single()
-                resourceName = project?.name || 'Projet inconnu'
+
+                if (project && !project.deleted_at) {
+                    resourceName = project.name
+                    organizationId = project.organization_id
+                    exists = true
+                }
+            }
+
+            if (!exists) {
+                // Supprimer automatiquement les favoris orphelins
+                await supabase.from('favorites').delete().eq('id', fav.id)
+                return null
             }
 
             return {
@@ -58,11 +77,13 @@ export async function getFavorites() {
                 resource_type: fav.resource_type,
                 resource_id: fav.resource_id,
                 resource_name: resourceName,
+                organization_id: organizationId,
             }
         })
     )
 
-    return favoritesWithNames
+    // Filtrer les null (favoris supprimés)
+    return favoritesWithDetails.filter((f): f is NonNullable<typeof f> => f !== null)
 }
 
 export async function toggleFavorite(

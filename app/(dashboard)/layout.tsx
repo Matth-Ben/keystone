@@ -2,7 +2,6 @@ import { getFavorites } from '@/lib/actions/favorites'
 import { getUserOrganizations } from '@/lib/actions/organizations'
 import { getOrganizationCookie } from '@/lib/actions/organization-cookie'
 import { DashboardShell } from '@/components/dashboard/dashboard-shell'
-import { redirect } from 'next/navigation'
 
 export default async function DashboardLayout({
     children,
@@ -16,9 +15,8 @@ export default async function DashboardLayout({
         getOrganizationCookie(),
     ])
 
-    if (organizations.length === 0) {
-        redirect('/onboarding')
-    }
+    // Plus de redirection forcée vers onboarding - les utilisateurs peuvent utiliser
+    // l'app sans organisation (mode "Tous mes secrets" pour secrets personnels)
 
     // Validation du cookie : est-ce que l'ID stocké correspond à une org de l'utilisateur ?
     // NOTE: La validation est faite côté client dans DashboardShell pour éviter les boucles de redirection serveur
@@ -30,6 +28,7 @@ export default async function DashboardLayout({
         resource_type: f.resource_type as 'client' | 'project',
         resource_id: f.resource_id,
         resource_name: f.resource_name,
+        organization_id: f.organization_id,
     }))
 
     return (

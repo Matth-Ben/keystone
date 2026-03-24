@@ -1,4 +1,5 @@
 import { Suspense } from 'react'
+import { redirect } from 'next/navigation'
 import { getClients, Client } from '@/lib/actions/clients'
 import { getOrganizationCookie } from '@/lib/actions/organization-cookie'
 import { ClientsGrid } from '@/components/clients/clients-grid'
@@ -13,21 +14,21 @@ export default async function ClientsPage({
 }: {
     searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }) {
-    const filters = await searchParams
-    const query = (filters.q as string) || ''
     const organizationId = await getOrganizationCookie()
 
-    let clients: Client[] = []
-    let role: OrgRole = 'restricted'
-
-    if (organizationId) {
-        const [fetchedClients, membership] = await Promise.all([
-            getClients(organizationId, query),
-            requireOrgRole(organizationId),
-        ])
-        clients = fetchedClients
-        role = membership.role
+    // Cette page nécessite une organisation
+    if (!organizationId) {
+        redirect('/secrets')
     }
+
+    const filters = await searchParams
+    const query = (filters.q as string) || ''
+
+    const [clients, membership] = await Promise.all([
+        getClients(organizationId, query),
+        requireOrgRole(organizationId),
+    ])
+    const role: OrgRole = membership.role
 
     return (
         <div className="space-y-6">
@@ -51,7 +52,7 @@ export default async function ClientsPage({
                 <ClientsGrid
                     clients={clients}
                     searchQuery={query}
-                    hasOrganization={!!organizationId}
+                    hasOrganization={true}
                 />
             </Suspense>
         </div>

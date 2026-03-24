@@ -58,7 +58,7 @@ export default async function ProjectPage({ params }: PageProps) {
                         </div>
                     </div>
                     <div className="flex items-center gap-2">
-                        <RecentTracker type="project" id={project.id} name={project.name} />
+                        <RecentTracker type="project" id={project.id} name={project.name} organizationId={project.organization_id} />
                         <ProjectActions project={project} role={role} />
                     </div>
                 </div>

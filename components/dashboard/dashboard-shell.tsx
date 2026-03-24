@@ -22,22 +22,21 @@ export function DashboardShell({ children, favorites, organizations, currentOrgI
     const [searchOpen, setSearchOpen] = useState(false)
     const { sidebarOpen, setSidebarOpen } = useAppStore()
 
-    // Show modal if we have organizations but no currentOrgId selected
-    const showOrgSelection = !currentOrgId && organizations.length > 0
+    // Ne plus forcer la sélection d'organisation - l'utilisateur peut utiliser
+    // le mode "Tous mes secrets" sans organisation sélectionnée
+    const showOrgSelection = false
 
     // Validation du cookie côté client
     const { setCurrentOrganization } = useAppStore()
 
-    // Si l'ID courant n'est pas dans la liste des organisations valides, on corrige
+    // Si l'ID courant n'est pas dans la liste des organisations valides, on passe en mode personnel
     if (currentOrgId && organizations.length > 0) {
         const isValid = organizations.some(o => o.id === currentOrgId)
         if (!isValid) {
-            console.warn('Invalid Organization ID detected, correcting...')
-            // On prend la première organisation valide
-            const validOrg = organizations[0]
-            // On le set via server action puis reload
+            console.warn('Invalid Organization ID detected, switching to personal mode...')
+            // On passe en mode "Tous mes secrets" (pas d'org)
             import('@/lib/actions/organization-cookie')
-                .then(mod => mod.setOrganizationCookie(validOrg.id))
+                .then(mod => mod.clearOrganizationCookie())
                 .then(() => {
                     // Force a hard reload to ensure server components re-render with new cookie
                     window.location.reload()
