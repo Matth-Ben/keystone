@@ -66,7 +66,7 @@ const SECRET_LIST_COLUMNS = `
 `
 
 export async function getAllSecrets(organizationId: string): Promise<{
-    secrets: (Secret & { clients: { name: string } | null })[]
+    secrets: (Secret & { clients: { id: string; name: string } | null })[]
     role: import('@/lib/rbac').OrgRole
 }> {
     const adminClient = createAdminClient() as any
@@ -88,13 +88,13 @@ export async function getAllSecrets(organizationId: string): Promise<{
     }
 
     return {
-        secrets: secretsResult.data as (Secret & { clients: { name: string } | null })[],
+        secrets: secretsResult.data as (Secret & { clients: { id: string; name: string } | null })[],
         role: membership.role
     }
 }
 
 // Récupérer tous les secrets de l'utilisateur (personnels + organisations)
-export async function getAllUserSecrets(): Promise<(Secret & { clients: { name: string } | null })[]> {
+export async function getAllUserSecrets(): Promise<(Secret & { clients: { id: string; name: string } | null })[]> {
     // 1. Authentification
     const supabase = await createClient() as any
     const { data: { user } } = await supabase.auth.getUser()
@@ -154,7 +154,7 @@ export async function getAllUserSecrets(): Promise<(Secret & { clients: { name: 
     const allSecrets = [...(personalResult.data || []), ...orgSecrets]
     allSecrets.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
-    return allSecrets as (Secret & { clients: { name: string } | null })[]
+    return allSecrets as (Secret & { clients: { id: string; name: string } | null })[]
 }
 
 export async function getSecrets(clientId: string): Promise<Secret[]> {
