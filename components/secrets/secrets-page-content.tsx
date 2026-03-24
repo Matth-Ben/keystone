@@ -66,6 +66,7 @@ import {
   moveSecretToClient,
   deleteFolder,
   reorderFolders,
+  reorderPersonalFolders,
 } from "@/lib/actions/folders";
 import { CreateFolderDialog } from "./create-folder-dialog";
 import { SecretDetailPanel } from "./secret-detail-panel";
@@ -93,7 +94,7 @@ interface SecretsPageContentProps {
   secrets: SecretWithRelations[];
   folders: SecretFolder[];
   clients: Client[];
-  organizationId: string;
+  organizationId: string | null;
   role: OrgRole;
 }
 
@@ -674,7 +675,11 @@ export function SecretsPageContent({
         setLocalFolderOrder(newOrder);
 
         try {
-          await reorderFolders(organizationId, newOrder);
+          if (organizationId) {
+            await reorderFolders(organizationId, newOrder);
+          } else {
+            await reorderPersonalFolders(newOrder);
+          }
         } catch (error: any) {
           setLocalFolderOrder(localFolderOrder);
           toast.error(error.message || "Erreur lors du réordonnancement");

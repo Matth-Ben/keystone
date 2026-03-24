@@ -1,10 +1,8 @@
 import { getAllSecrets, getAllUserSecrets } from '@/lib/actions/secrets'
 import { getOrganizationCookie } from '@/lib/actions/organization-cookie'
-import { getFolders } from '@/lib/actions/folders'
+import { getFolders, getPersonalFolders } from '@/lib/actions/folders'
 import { getClients } from '@/lib/actions/clients'
-import { SecretList } from '@/components/secrets/secret-list'
 import { SecretsPageContent } from '@/components/secrets/secrets-page-content'
-import { type OrgRole } from '@/lib/rbac'
 
 export async function SecretsLoader() {
     const organizationId = await getOrganizationCookie()
@@ -27,8 +25,20 @@ export async function SecretsLoader() {
             />
         )
     } else {
-        // Mode personnel : pas de dossiers, affichage simple
-        const secrets = await getAllUserSecrets()
-        return <SecretList secrets={secrets} role="admin" />
+        // Mode personnel : secrets personnels + dossiers personnels
+        const [secrets, folders] = await Promise.all([
+            getAllUserSecrets(),
+            getPersonalFolders()
+        ])
+
+        return (
+            <SecretsPageContent
+                secrets={secrets}
+                folders={folders}
+                clients={[]}
+                organizationId={null}
+                role="admin"
+            />
+        )
     }
 }

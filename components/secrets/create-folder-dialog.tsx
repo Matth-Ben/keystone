@@ -44,7 +44,7 @@ const formSchema = z.object({
 interface CreateFolderDialogProps {
     open: boolean
     onOpenChange: (open: boolean) => void
-    organizationId: string
+    organizationId: string | null
     folderToEdit?: SecretFolder
     onFolderCreated?: (folder: SecretFolder) => void
 }
@@ -88,7 +88,7 @@ export function CreateFolderDialog({
                 toast.success('Dossier modifié')
             } else {
                 const folder = await createFolder({
-                    organizationId,
+                    organizationId: organizationId || undefined,
                     name: values.name,
                     color: selectedColor || undefined,
                 })

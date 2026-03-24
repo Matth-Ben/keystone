@@ -7,7 +7,7 @@ import { requireOrgRole, assertCanWrite, assertCanDelete } from '@/lib/rbac'
 
 export interface SecretFolder {
     id: string
-    organization_id: string
+    organization_id: string | null
     name: string
     color: string | null
     icon: string | null
@@ -18,7 +18,7 @@ export interface SecretFolder {
 }
 
 export interface CreateFolderData {
-    organizationId: string
+    organizationId?: string | null  // null = personal folder
     name: string
     color?: string
     icon?: string
@@ -55,7 +55,33 @@ export async function getFolders(organizationId: string): Promise<SecretFolder[]
 }
 
 /**
- * Create a new folder
+ * Get all personal folders for the current user
+ */
+export async function getPersonalFolders(): Promise<SecretFolder[]> {
+    const supabase = await createClient() as any
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('Non authentifié')
+
+    const adminClient = createAdminClient() as any
+
+    const { data, error } = await adminClient
+        .from('secret_folders')
+        .select('*')
+        .is('organization_id', null)
+        .eq('created_by', user.id)
+        .order('position', { ascending: true })
+        .order('name', { ascending: true })
+
+    if (error) {
+        console.error('Error fetching personal folders:', error)
+        throw new Error('Erreur lors du chargement des dossiers')
+    }
+
+    return data as SecretFolder[]
+}
+
+/**
+ * Create a new folder (organization or personal)
  */
 export async function createFolder(data: CreateFolderData): Promise<SecretFolder> {
     // 1. Auth + role check
@@ -63,27 +89,37 @@ export async function createFolder(data: CreateFolderData): Promise<SecretFolder
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) throw new Error('Non authentifié')
 
-    const { role } = await requireOrgRole(data.organizationId)
-    assertCanWrite(role)
+    const isPersonal = !data.organizationId
+
+    // For org folders, verify role
+    if (!isPersonal) {
+        const { role } = await requireOrgRole(data.organizationId!)
+        assertCanWrite(role)
+    }
 
     // 2. Get next position
     const adminClient = createAdminClient() as any
 
-    const { data: lastFolder } = await adminClient
+    let positionQuery = adminClient
         .from('secret_folders')
         .select('position')
-        .eq('organization_id', data.organizationId)
         .order('position', { ascending: false })
         .limit(1)
-        .single()
 
+    if (isPersonal) {
+        positionQuery = positionQuery.is('organization_id', null).eq('created_by', user.id)
+    } else {
+        positionQuery = positionQuery.eq('organization_id', data.organizationId)
+    }
+
+    const { data: lastFolder } = await positionQuery.single()
     const nextPosition = (lastFolder?.position ?? -1) + 1
 
     // 3. Create folder
     const { data: folder, error } = await adminClient
         .from('secret_folders')
         .insert({
-            organization_id: data.organizationId,
+            organization_id: data.organizationId || null,
             name: data.name,
             color: data.color || null,
             icon: data.icon || null,
@@ -109,12 +145,17 @@ export async function createFolder(data: CreateFolderData): Promise<SecretFolder
  * Update a folder
  */
 export async function updateFolder(folderId: string, data: UpdateFolderData): Promise<void> {
-    // 1. Get folder to find org
+    // 1. Auth
+    const supabase = await createClient() as any
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('Non authentifié')
+
+    // 2. Get folder to find org
     const adminClient = createAdminClient() as any
 
     const { data: folder, error: fetchError } = await adminClient
         .from('secret_folders')
-        .select('organization_id')
+        .select('organization_id, created_by')
         .eq('id', folderId)
         .single()
 
@@ -122,11 +163,19 @@ export async function updateFolder(folderId: string, data: UpdateFolderData): Pr
         throw new Error('Dossier introuvable')
     }
 
-    // 2. Role check
-    const { role } = await requireOrgRole(folder.organization_id)
-    assertCanWrite(role)
+    // 3. Role check
+    if (folder.organization_id) {
+        // Org folder - check role
+        const { role } = await requireOrgRole(folder.organization_id)
+        assertCanWrite(role)
+    } else {
+        // Personal folder - check ownership
+        if (folder.created_by !== user.id) {
+            throw new Error('Accès non autorisé')
+        }
+    }
 
-    // 3. Update
+    // 4. Update
     const updateData: any = {
         updated_at: new Date().toISOString()
     }
@@ -155,12 +204,17 @@ export async function updateFolder(folderId: string, data: UpdateFolderData): Pr
  * Delete a folder (secrets become unfiled)
  */
 export async function deleteFolder(folderId: string): Promise<void> {
-    // 1. Get folder to find org
+    // 1. Auth
+    const supabase = await createClient() as any
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('Non authentifié')
+
+    // 2. Get folder to find org
     const adminClient = createAdminClient() as any
 
     const { data: folder, error: fetchError } = await adminClient
         .from('secret_folders')
-        .select('organization_id')
+        .select('organization_id, created_by')
         .eq('id', folderId)
         .single()
 
@@ -168,17 +222,25 @@ export async function deleteFolder(folderId: string): Promise<void> {
         throw new Error('Dossier introuvable')
     }
 
-    // 2. Role check - only admins can delete
-    const { role } = await requireOrgRole(folder.organization_id)
-    assertCanDelete(role)
+    // 3. Role check
+    if (folder.organization_id) {
+        // Org folder - only admins can delete
+        const { role } = await requireOrgRole(folder.organization_id)
+        assertCanDelete(role)
+    } else {
+        // Personal folder - check ownership
+        if (folder.created_by !== user.id) {
+            throw new Error('Accès non autorisé')
+        }
+    }
 
-    // 3. Remove folder_id from secrets in this folder (they become unfiled)
+    // 4. Remove folder_id from secrets in this folder (they become unfiled)
     await adminClient
         .from('secrets')
         .update({ folder_id: null })
         .eq('folder_id', folderId)
 
-    // 4. Delete folder
+    // 5. Delete folder
     const { error } = await adminClient
         .from('secret_folders')
         .delete()
@@ -214,24 +276,24 @@ export async function moveSecretToFolder(secretId: string, folderId: string | nu
     }
 
     // 2. Check access
-    if (!secret.organization_id) {
+    const isPersonalSecret = !secret.organization_id
+
+    if (isPersonalSecret) {
         // Personal secret - only creator can move
         if (secret.created_by !== user.id) {
             throw new Error('Accès non autorisé')
         }
-        // Personal secrets can't be moved to folders
-        throw new Error('Les secrets personnels ne peuvent pas être déplacés dans des dossiers')
+    } else {
+        // Org secret - verify role
+        const { role } = await requireOrgRole(secret.organization_id)
+        assertCanWrite(role)
     }
 
-    // Org secret - verify role
-    const { role } = await requireOrgRole(secret.organization_id)
-    assertCanWrite(role)
-
-    // 3. If folderId provided, verify folder belongs to same org
+    // 3. If folderId provided, verify folder compatibility
     if (folderId) {
         const { data: folder, error: folderError } = await adminClient
             .from('secret_folders')
-            .select('organization_id')
+            .select('organization_id, created_by')
             .eq('id', folderId)
             .single()
 
@@ -239,8 +301,16 @@ export async function moveSecretToFolder(secretId: string, folderId: string | nu
             throw new Error('Dossier introuvable')
         }
 
-        if (folder.organization_id !== secret.organization_id) {
-            throw new Error('Le dossier doit appartenir à la même organisation')
+        if (isPersonalSecret) {
+            // Personal secret can only go into personal folder owned by same user
+            if (folder.organization_id !== null || folder.created_by !== user.id) {
+                throw new Error('Ce dossier n\'est pas accessible')
+            }
+        } else {
+            // Org secret can only go into org folder of same org
+            if (folder.organization_id !== secret.organization_id) {
+                throw new Error('Le dossier doit appartenir à la même organisation')
+            }
         }
     }
 
@@ -277,6 +347,31 @@ export async function reorderFolders(organizationId: string, folderIds: string[]
             .update({ position: index })
             .eq('id', id)
             .eq('organization_id', organizationId)
+    )
+
+    await Promise.all(updates)
+
+    revalidatePath('/secrets')
+}
+
+/**
+ * Reorder personal folders
+ */
+export async function reorderPersonalFolders(folderIds: string[]): Promise<void> {
+    const supabase = await createClient() as any
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('Non authentifié')
+
+    const adminClient = createAdminClient() as any
+
+    // Update positions - only for folders owned by this user with no org
+    const updates = folderIds.map((id, index) =>
+        adminClient
+            .from('secret_folders')
+            .update({ position: index })
+            .eq('id', id)
+            .is('organization_id', null)
+            .eq('created_by', user.id)
     )
 
     await Promise.all(updates)
