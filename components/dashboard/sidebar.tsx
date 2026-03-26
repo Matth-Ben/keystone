@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Users, Star, Clock, Key, Building2, FolderOpen, Download } from 'lucide-react'
+import { Users, Star, Clock, Key, Building2, FolderOpen, Download, Loader2 } from 'lucide-react'
 import { OrganizationSwitcher } from './organization-switcher'
 import { SidebarResourceLink } from './sidebar-resource-link'
 import { useAppStore, Favorite, Organization } from '@/lib/store/app-store'
@@ -25,28 +25,117 @@ interface SidebarProps {
     currentOrgId?: string
 }
 
-function getBrowserName(): string {
-    if (typeof window === 'undefined') return 'navigateur'
+type BrowserType = 'chrome' | 'firefox' | 'safari' | 'edge' | 'unknown'
+
+interface BrowserInfo {
+    type: BrowserType
+    displayName: string
+}
+
+function getBrowserInfo(): BrowserInfo {
+    if (typeof window === 'undefined') return { type: 'unknown', displayName: 'navigateur' }
 
     const userAgent = navigator.userAgent.toLowerCase()
 
-    if (userAgent.includes('firefox')) return 'Firefox'
-    if (userAgent.includes('safari') && !userAgent.includes('chrome')) return 'Safari'
-    if (userAgent.includes('edg')) return 'Edge'
-    if (userAgent.includes('chrome')) return 'Chrome'
+    if (userAgent.includes('firefox')) return { type: 'firefox', displayName: 'Firefox' }
+    if (userAgent.includes('safari') && !userAgent.includes('chrome')) return { type: 'safari', displayName: 'Safari' }
+    if (userAgent.includes('edg')) return { type: 'edge', displayName: 'Edge' }
+    if (userAgent.includes('chrome')) return { type: 'chrome', displayName: 'Chrome' }
 
-    return 'navigateur'
+    return { type: 'unknown', displayName: 'navigateur' }
+}
+
+interface ReleaseAsset {
+    name: string
+    browser_download_url: string
+}
+
+interface GitHubRelease {
+    tag_name: string
+    assets: ReleaseAsset[]
+}
+
+const GITHUB_REPO = 'Matth-Ben/keystone-google-app'
+const CACHE_KEY = 'keystone-extension-release'
+const CACHE_DURATION = 1000 * 60 * 60 // 1 heure
+
+function getExtensionDownloadUrl(assets: ReleaseAsset[], browserType: BrowserType): string | null {
+    // Mapping des navigateurs vers les patterns de fichiers
+    const browserPatterns: Record<BrowserType, string[]> = {
+        chrome: ['chrome-mv3', 'chrome'],
+        edge: ['chrome-mv3', 'chrome'], // Edge utilise les extensions Chrome
+        firefox: ['firefox-mv2', 'firefox'],
+        safari: ['safari-mv2', 'safari'],
+        unknown: [],
+    }
+
+    const patterns = browserPatterns[browserType]
+
+    for (const pattern of patterns) {
+        const asset = assets.find(a => a.name.toLowerCase().includes(pattern))
+        if (asset) return asset.browser_download_url
+    }
+
+    return null
+}
+
+async function fetchLatestRelease(): Promise<GitHubRelease | null> {
+    // Vérifier le cache
+    if (typeof window !== 'undefined') {
+        const cached = localStorage.getItem(CACHE_KEY)
+        if (cached) {
+            try {
+                const { data, timestamp } = JSON.parse(cached)
+                if (Date.now() - timestamp < CACHE_DURATION) {
+                    return data
+                }
+            } catch {
+                // Cache invalide, on continue
+            }
+        }
+    }
+
+    try {
+        const response = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`)
+        if (!response.ok) return null
+
+        const data = await response.json()
+
+        // Mettre en cache
+        if (typeof window !== 'undefined') {
+            localStorage.setItem(CACHE_KEY, JSON.stringify({
+                data,
+                timestamp: Date.now()
+            }))
+        }
+
+        return data
+    } catch {
+        return null
+    }
 }
 
 export function Sidebar({ favorites, organizations, currentOrgId }: SidebarProps) {
     const pathname = usePathname()
     const { recents, removeRecent } = useAppStore()
-    const [browserName, setBrowserName] = useState('navigateur')
+    const [browserInfo, setBrowserInfo] = useState<BrowserInfo>({ type: 'unknown', displayName: 'navigateur' })
+    const [downloadUrl, setDownloadUrl] = useState<string | null>(null)
+    const [isLoadingRelease, setIsLoadingRelease] = useState(true)
     const [validatedRecents, setValidatedRecents] = useState(recents)
     const hasValidated = useRef(false)
 
     useEffect(() => {
-        setBrowserName(getBrowserName())
+        const info = getBrowserInfo()
+        setBrowserInfo(info)
+
+        // Récupérer la dernière release
+        fetchLatestRelease().then((release) => {
+            if (release) {
+                const url = getExtensionDownloadUrl(release.assets, info.type)
+                setDownloadUrl(url)
+            }
+            setIsLoadingRelease(false)
+        })
     }, [])
 
     // Valider les récents au montage et nettoyer les éléments supprimés
@@ -186,18 +275,37 @@ export function Sidebar({ favorites, organizations, currentOrgId }: SidebarProps
 
             {/* Extension Download */}
             <div className="border-t p-3">
-                <a
-                    href="https://github.com/Matth-Ben/keystone-google-app"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                >
-                    <Download className="h-4 w-4" />
-                    <div className="flex flex-col">
-                        <span className="font-medium">Extension {browserName}</span>
-                        <span className="text-xs">Accédez à vos secrets facilement</span>
+                {isLoadingRelease ? (
+                    <div className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>Chargement...</span>
                     </div>
-                </a>
+                ) : downloadUrl ? (
+                    <a
+                        href={downloadUrl}
+                        download
+                        className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    >
+                        <Download className="h-4 w-4" />
+                        <div className="flex flex-col">
+                            <span className="font-medium">Extension {browserInfo.displayName}</span>
+                            <span className="text-xs">Télécharger l&apos;extension</span>
+                        </div>
+                    </a>
+                ) : (
+                    <a
+                        href={`https://github.com/${GITHUB_REPO}/releases/latest`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    >
+                        <Download className="h-4 w-4" />
+                        <div className="flex flex-col">
+                            <span className="font-medium">Extension {browserInfo.displayName}</span>
+                            <span className="text-xs">Voir les téléchargements</span>
+                        </div>
+                    </a>
+                )}
             </div>
         </div>
     )
