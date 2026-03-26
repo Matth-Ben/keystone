@@ -48,11 +48,21 @@ import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { createSecret, updateSecret, revealSecret, Secret, SecretType } from '@/lib/actions/secrets'
 import { getClients, Client } from '@/lib/actions/clients'
+import { getUserOrganizations } from '@/lib/actions/organizations'
 import { useAppStore } from '@/lib/store/app-store'
+
+interface UserOrganization {
+    id: string
+    name: string
+    slug: string
+    logo_url?: string | null
+    role: string
+}
 import { CreateClientDialog } from '@/components/clients/create-client-dialog'
 import { cn } from '@/lib/utils'
 
 const formSchema = z.object({
+    organization_id: z.string().optional(),
     client_id: z.string().optional(),
     type: z.enum(['ssh', 'ftp', 'db', 'cms', 'api', 'other'] as [string, ...string[]]),
     title: z.string().min(1, 'Le titre est requis'),
@@ -84,14 +94,18 @@ export function CreateSecretDialog({
     // eslint-disable-next-line
     const [showPassword, setShowPassword] = useState(false)
     const [isLoadingPassword, setIsLoadingPassword] = useState(false)
+    const [organizations, setOrganizations] = useState<UserOrganization[]>([])
+    const [loadingOrganizations, setLoadingOrganizations] = useState(false)
     const [clients, setClients] = useState<Client[]>([])
     const [loadingClients, setLoadingClients] = useState(false)
     const [createClientOpen, setCreateClientOpen] = useState(false)
+    const [orgPopoverOpen, setOrgPopoverOpen] = useState(false)
     const [popoverOpen, setPopoverOpen] = useState(false)
 
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
         defaultValues: {
+            organization_id: '',
             client_id: clientId || '',
             type: 'other',
             title: '',
@@ -104,6 +118,9 @@ export function CreateSecretDialog({
             notes: '',
         },
     })
+
+    // Watch organization_id pour charger les clients dynamiquement
+    const selectedOrgId = form.watch('organization_id')
 
     const type = form.watch('type') as SecretType
 
@@ -125,24 +142,46 @@ export function CreateSecretDialog({
         }
 
         // Background refresh pour être sûr de la synchro
-        if (currentOrganization) {
+        const orgId = currentOrganization?.id || selectedOrgId
+        if (orgId) {
             // On ne met pas loadingClients à true pour éviter le flash de chargement qui cacherait la sélection
-            getClients(currentOrganization.id)
+            getClients(orgId)
                 .then(setClients)
                 .catch(() => toast.error("Erreur lors de la mise à jour de la liste des clients"))
         }
     }
 
-    // Charger les clients si aucun clientId n'est fourni
+    // Charger les organisations si on est en mode "Tous mes secrets"
     useEffect(() => {
-        if (open && !clientId && currentOrganization) {
+        if (open && !currentOrganization) {
+            setLoadingOrganizations(true)
+            getUserOrganizations()
+                .then(setOrganizations)
+                .catch(() => toast.error("Erreur lors du chargement des organisations"))
+                .finally(() => setLoadingOrganizations(false))
+        }
+    }, [open, currentOrganization])
+
+    // Charger les clients selon l'organisation (currentOrganization ou celle sélectionnée dans le formulaire)
+    useEffect(() => {
+        const orgId = currentOrganization?.id || selectedOrgId
+        if (open && !clientId && orgId) {
             setLoadingClients(true)
-            getClients(currentOrganization.id)
+            getClients(orgId)
                 .then(setClients)
                 .catch(() => toast.error("Erreur lors du chargement des clients"))
                 .finally(() => setLoadingClients(false))
+        } else if (!orgId) {
+            setClients([])
         }
-    }, [open, clientId, currentOrganization])
+    }, [open, clientId, currentOrganization, selectedOrgId])
+
+    // Reset client_id quand l'organisation change (en mode "Tous mes secrets")
+    useEffect(() => {
+        if (!currentOrganization && selectedOrgId !== undefined) {
+            form.setValue('client_id', '')
+        }
+    }, [selectedOrgId, currentOrganization, form])
 
     useEffect(() => {
         if (open) {
@@ -151,6 +190,7 @@ export function CreateSecretDialog({
 
             // Reset de base
             form.reset({
+                organization_id: secretToEdit?.organization_id || '',
                 client_id: clientId || secretToEdit?.client_id || '',
                 type: secretToEdit?.type || 'other',
                 title: secretToEdit?.title || '',
@@ -182,8 +222,10 @@ export function CreateSecretDialog({
 
     async function onSubmit(values: z.infer<typeof formSchema>) {
         try {
+            // Organisation : soit celle du contexte, soit celle sélectionnée dans le formulaire
+            const finalOrgId = currentOrganization?.id || values.organization_id || null
             // Client uniquement si une organisation est sélectionnée
-            const finalClientId = currentOrganization ? (clientId || values.client_id || null) : null
+            const finalClientId = finalOrgId ? (clientId || values.client_id || null) : null
 
             if (!isEdit && !values.password) {
                 form.setError('password', { message: 'Le mot de passe est requis' })
@@ -191,7 +233,7 @@ export function CreateSecretDialog({
             }
 
             const data = {
-                organization_id: currentOrganization?.id || null,
+                organization_id: finalOrgId,
                 client_id: finalClientId,
                 type: values.type as SecretType,
                 title: values.title,
@@ -211,7 +253,7 @@ export function CreateSecretDialog({
             } else {
                 // @ts-ignore
                 await createSecret(data)
-                toast.success(currentOrganization ? 'Secret créé' : 'Secret personnel créé')
+                toast.success(finalOrgId ? 'Secret créé' : 'Secret personnel créé')
             }
             onOpenChange(false)
         } catch (error: any) {
@@ -236,20 +278,124 @@ export function CreateSecretDialog({
             <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>
-                        {isEdit ? 'Modifier le secret' : (currentOrganization ? 'Nouveau Secret' : 'Nouveau Secret Personnel')}
+                        {isEdit ? 'Modifier le secret' : 'Nouveau Secret'}
                     </DialogTitle>
                     <DialogDescription>
                         {currentOrganization
                             ? 'Ajoutez des identifiants ou clés API sécurisés.'
-                            : 'Ce secret sera personnel et visible uniquement par vous.'}
+                            : 'Choisissez une organisation ou créez un secret personnel.'}
                     </DialogDescription>
                 </DialogHeader>
 
                 <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
 
+                        {/* Sélection de l'organisation si on est en mode "Tous mes secrets" */}
+                        {!currentOrganization && (
+                            <div className="space-y-2">
+                                <FormField
+                                    control={form.control}
+                                    name="organization_id"
+                                    render={({ field }) => (
+                                        <FormItem className="flex flex-col">
+                                            <FormLabel>Organisation <span className="text-muted-foreground font-normal">(optionnel)</span></FormLabel>
+                                            <Popover open={orgPopoverOpen} onOpenChange={setOrgPopoverOpen}>
+                                                <PopoverTrigger asChild>
+                                                    <FormControl>
+                                                        <Button
+                                                            variant="outline"
+                                                            role="combobox"
+                                                            aria-expanded={orgPopoverOpen}
+                                                            className={cn(
+                                                                "w-full justify-between",
+                                                                !field.value && "text-muted-foreground"
+                                                            )}
+                                                            disabled={loadingOrganizations}
+                                                        >
+                                                            {loadingOrganizations ? (
+                                                                <>
+                                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                                    Chargement...
+                                                                </>
+                                                            ) : field.value ? (
+                                                                organizations.find(org => org.id === field.value)?.name
+                                                            ) : (
+                                                                "Secret personnel"
+                                                            )}
+                                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                                        </Button>
+                                                    </FormControl>
+                                                </PopoverTrigger>
+                                                <PopoverContent className="w-[400px] p-0" align="start">
+                                                    <Command>
+                                                        <CommandInput placeholder="Rechercher une organisation..." />
+                                                        <CommandList>
+                                                            <CommandEmpty>Aucune organisation trouvée.</CommandEmpty>
+                                                            <CommandGroup>
+                                                                <CommandItem
+                                                                    value="personnel"
+                                                                    onSelect={() => {
+                                                                        form.setValue("organization_id", "")
+                                                                        setOrgPopoverOpen(false)
+                                                                    }}
+                                                                    className="cursor-pointer"
+                                                                >
+                                                                    <Check
+                                                                        className={cn(
+                                                                            "mr-2 h-4 w-4",
+                                                                            !field.value ? "opacity-100" : "opacity-0"
+                                                                        )}
+                                                                    />
+                                                                    <span className="text-muted-foreground">Secret personnel</span>
+                                                                </CommandItem>
+                                                                {organizations.map((org) => (
+                                                                    <CommandItem
+                                                                        value={org.name}
+                                                                        key={org.id}
+                                                                        onSelect={() => {
+                                                                            form.setValue("organization_id", org.id)
+                                                                            setOrgPopoverOpen(false)
+                                                                        }}
+                                                                        className="cursor-pointer"
+                                                                    >
+                                                                        <Check
+                                                                            className={cn(
+                                                                                "mr-2 h-4 w-4",
+                                                                                org.id === field.value
+                                                                                    ? "opacity-100"
+                                                                                    : "opacity-0"
+                                                                            )}
+                                                                        />
+                                                                        <div className="flex items-center gap-2">
+                                                                            <div className="flex h-5 w-5 items-center justify-center rounded bg-primary/10 text-xs font-semibold overflow-hidden">
+                                                                                {org.logo_url ? (
+                                                                                    <img
+                                                                                        src={org.logo_url}
+                                                                                        alt={org.name}
+                                                                                        className="h-full w-full object-cover"
+                                                                                    />
+                                                                                ) : (
+                                                                                    org.name.charAt(0).toUpperCase()
+                                                                                )}
+                                                                            </div>
+                                                                            <span>{org.name}</span>
+                                                                        </div>
+                                                                    </CommandItem>
+                                                                ))}
+                                                            </CommandGroup>
+                                                        </CommandList>
+                                                    </Command>
+                                                </PopoverContent>
+                                            </Popover>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                            </div>
+                        )}
+
                         {/* Sélection du client si organisation sélectionnée et non fourni */}
-                        {currentOrganization && !clientId && (
+                        {(currentOrganization || selectedOrgId) && !clientId && (
                             <div className="space-y-2">
                                 <FormField
                                     control={form.control}
@@ -550,6 +696,7 @@ export function CreateSecretDialog({
                     open={createClientOpen}
                     onOpenChange={setCreateClientOpen}
                     onClientCreated={handleClientCreated}
+                    organizationId={selectedOrgId || undefined}
                 />
             </DialogContent>
         </Dialog>

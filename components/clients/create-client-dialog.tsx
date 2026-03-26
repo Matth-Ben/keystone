@@ -46,6 +46,7 @@ interface CreateClientDialogProps {
     onOpenChange?: (open: boolean) => void
     onClientCreated?: (client: Client) => void
     clientToEdit?: Client
+    organizationId?: string // Override pour le mode "Tous mes secrets"
 }
 
 export function CreateClientDialog({
@@ -53,9 +54,13 @@ export function CreateClientDialog({
     onOpenChange: controlledOnOpenChange,
     onClientCreated,
     clientToEdit,
+    organizationId,
 }: CreateClientDialogProps) {
     const [internalOpen, setInternalOpen] = useState(false)
     const { currentOrganization } = useAppStore()
+
+    // Utiliser l'organizationId passé en prop ou celui du store
+    const effectiveOrgId = organizationId || currentOrganization?.id
 
     const isControlled = controlledOpen !== undefined
     const open = isControlled ? controlledOpen : internalOpen
@@ -84,7 +89,7 @@ export function CreateClientDialog({
     }, [open, clientToEdit, form])
 
     async function onSubmit(values: z.infer<typeof formSchema>) {
-        if (!currentOrganization && !clientToEdit) return
+        if (!effectiveOrgId && !clientToEdit) return
 
         try {
             let result: Client
@@ -107,7 +112,7 @@ export function CreateClientDialog({
                     name: values.name,
                     website: values.website || undefined,
                     description: values.description || undefined,
-                    organizationId: currentOrganization!.id,
+                    organizationId: effectiveOrgId!,
                 })
                 toast.success('Client créé avec succès')
             }
