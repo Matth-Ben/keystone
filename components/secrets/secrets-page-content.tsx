@@ -502,6 +502,8 @@ export function SecretsPageContent({
   );
   const [overId, setOverId] = useState<UniqueIdentifier | null>(null);
   const [search, setSearch] = useState("");
+  const [searchExpandedFolders, setSearchExpandedFolders] = useState<Set<string>>(new Set());
+  const [searchExpandedClients, setSearchExpandedClients] = useState<Set<string>>(new Set());
 
   // Dialogs
   const [createFolderOpen, setCreateFolderOpen] = useState(false);
@@ -583,26 +585,108 @@ export function SecretsPageContent({
       .filter((f): f is SecretFolder => !!f);
   }, [folders, localFolderOrder]);
 
-  // Search filter
-  const filteredLooseSecrets = useMemo(() => {
-    if (!search.trim()) return looseSecrets;
+  // Helper function to check if a secret matches search terms
+  const matchesSearch = (secret: SecretWithRelations, terms: string[]): boolean => {
+    if (terms.length === 0) return true;
+    const searchable = [
+      secret.title,
+      secret.username,
+      secret.host,
+      secret.notes,
+      secret.clients?.name,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    return terms.every((term) => searchable.includes(term));
+  };
+
+  // Search filter - applies to ALL secrets (folders, clients, and loose)
+  const {
+    filteredSecretsByFolder,
+    filteredSecretsByClient,
+    filteredLooseSecrets,
+    searchTerms,
+  } = useMemo(() => {
     const terms = search
       .toLowerCase()
       .split(/\s+/)
       .filter((t) => t.length > 0);
-    return looseSecrets.filter((secret) => {
-      const searchable = [
-        secret.title,
-        secret.username,
-        secret.host,
-        secret.notes,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-      return terms.every((term) => searchable.includes(term));
+
+    // If no search, return unfiltered data
+    if (terms.length === 0) {
+      return {
+        filteredSecretsByFolder: secretsByFolder,
+        filteredSecretsByClient: secretsByClient,
+        filteredLooseSecrets: looseSecrets,
+        searchTerms: terms,
+      };
+    }
+
+    // Filter secrets in each folder
+    const byFolder = new Map<string, SecretWithRelations[]>();
+    secretsByFolder.forEach((secrets, folderId) => {
+      const filtered = secrets.filter((s) => matchesSearch(s, terms));
+      if (filtered.length > 0) {
+        byFolder.set(folderId, filtered);
+      }
     });
-  }, [looseSecrets, search]);
+
+    // Filter secrets in each client
+    const byClient = new Map<string, SecretWithRelations[]>();
+    secretsByClient.forEach((secrets, clientId) => {
+      const filtered = secrets.filter((s) => matchesSearch(s, terms));
+      if (filtered.length > 0) {
+        byClient.set(clientId, filtered);
+      }
+    });
+
+    // Filter loose secrets
+    const loose = looseSecrets.filter((s) => matchesSearch(s, terms));
+
+    return {
+      filteredSecretsByFolder: byFolder,
+      filteredSecretsByClient: byClient,
+      filteredLooseSecrets: loose,
+      searchTerms: terms,
+    };
+  }, [secretsByFolder, secretsByClient, looseSecrets, search]);
+
+  // Auto-expand folders/clients with search results
+  useEffect(() => {
+    if (searchTerms.length > 0) {
+      setSearchExpandedFolders(new Set(filteredSecretsByFolder.keys()));
+      setSearchExpandedClients(new Set(filteredSecretsByClient.keys()));
+    } else {
+      setSearchExpandedFolders(new Set());
+      setSearchExpandedClients(new Set());
+    }
+  }, [searchTerms, filteredSecretsByFolder, filteredSecretsByClient]);
+
+  // Visible folders (filtered when searching)
+  const visibleFolders = useMemo(() => {
+    if (searchTerms.length === 0) return orderedFolders;
+    return orderedFolders.filter((f) => filteredSecretsByFolder.has(f.id));
+  }, [orderedFolders, filteredSecretsByFolder, searchTerms]);
+
+  // Visible clients (filtered when searching)
+  const visibleClients = useMemo(() => {
+    if (searchTerms.length === 0) return clientsWithSecrets;
+    return clientsWithSecrets.filter((c) => filteredSecretsByClient.has(c.id));
+  }, [clientsWithSecrets, filteredSecretsByClient, searchTerms]);
+
+  // Effective expanded state (manual + search-triggered)
+  const effectiveExpandedFolders = useMemo(() => {
+    const combined = new Set(expandedFolders);
+    searchExpandedFolders.forEach((id) => combined.add(id));
+    return combined;
+  }, [expandedFolders, searchExpandedFolders]);
+
+  const effectiveExpandedClients = useMemo(() => {
+    const combined = new Set(expandedClients);
+    searchExpandedClients.forEach((id) => combined.add(id));
+    return combined;
+  }, [expandedClients, searchExpandedClients]);
 
   // DnD sensors
   const sensors = useSensors(
@@ -763,39 +847,39 @@ export function SecretsPageContent({
     }
   };
 
-  // Build sortable items list - include ALL secrets for drag & drop
+  // Build sortable items list - include ALL visible secrets for drag & drop
   const sortableItems = useMemo(() => {
     const items: string[] = [];
 
-    // Custom folders and their secrets
-    orderedFolders.forEach((folder) => {
+    // Custom folders and their secrets (filtered)
+    visibleFolders.forEach((folder) => {
       items.push(`folder-${folder.id}`);
-      if (expandedFolders.has(folder.id)) {
-        const folderSecrets = secretsByFolder.get(folder.id) || [];
+      if (effectiveExpandedFolders.has(folder.id)) {
+        const folderSecrets = filteredSecretsByFolder.get(folder.id) || [];
         folderSecrets.forEach((s) => items.push(`secret-${s.id}`));
       }
     });
 
-    // Client folder secrets
-    clientsWithSecrets.forEach((client) => {
-      if (expandedClients.has(client.id)) {
-        const clientSecrets = secretsByClient.get(client.id) || [];
+    // Client folder secrets (filtered)
+    visibleClients.forEach((client) => {
+      if (effectiveExpandedClients.has(client.id)) {
+        const clientSecrets = filteredSecretsByClient.get(client.id) || [];
         clientSecrets.forEach((s) => items.push(`secret-${s.id}`));
       }
     });
 
-    // Loose secrets
-    looseSecrets.forEach((s) => items.push(`secret-${s.id}`));
+    // Loose secrets (filtered)
+    filteredLooseSecrets.forEach((s) => items.push(`secret-${s.id}`));
 
     return items;
   }, [
-    orderedFolders,
-    expandedFolders,
-    secretsByFolder,
-    clientsWithSecrets,
-    expandedClients,
-    secretsByClient,
-    looseSecrets,
+    visibleFolders,
+    effectiveExpandedFolders,
+    filteredSecretsByFolder,
+    visibleClients,
+    effectiveExpandedClients,
+    filteredSecretsByClient,
+    filteredLooseSecrets,
   ]);
 
   // Get active item for overlay
@@ -808,7 +892,14 @@ export function SecretsPageContent({
       ? secrets.find((s) => `secret-${s.id}` === activeId)
       : null;
 
+  // Check if there's any content to display (considering search filter)
   const hasContent =
+    visibleFolders.length > 0 ||
+    visibleClients.length > 0 ||
+    filteredLooseSecrets.length > 0;
+
+  // Check if there's any content at all (without filter)
+  const hasAnySecrets =
     folders.length > 0 ||
     clientsWithSecrets.length > 0 ||
     looseSecrets.length > 0;
@@ -862,7 +953,7 @@ export function SecretsPageContent({
           )}
         </div>
 
-        {!hasContent ? (
+        {!hasAnySecrets ? (
           <div className="flex flex-col items-center justify-center p-12 border rounded-lg border-dashed text-center">
             <div className="rounded-full bg-secondary p-4 mb-4">
               <Key className="h-8 w-8 text-muted-foreground" />
@@ -882,6 +973,23 @@ export function SecretsPageContent({
               </Button>
             )}
           </div>
+        ) : !hasContent ? (
+          <div className="flex flex-col items-center justify-center p-12 border rounded-lg border-dashed text-center">
+            <div className="rounded-full bg-secondary p-4 mb-4">
+              <Search className="h-8 w-8 text-muted-foreground" />
+            </div>
+            <h3 className="text-lg font-semibold">Aucun résultat</h3>
+            <p className="text-muted-foreground text-sm max-w-sm mt-2">
+              Aucun secret ne correspond à votre recherche "{search}".
+            </p>
+            <Button
+              variant="outline"
+              className="mt-4"
+              onClick={() => setSearch("")}
+            >
+              Effacer la recherche
+            </Button>
+          </div>
         ) : (
           <DndContext
             sensors={sensors}
@@ -896,18 +1004,18 @@ export function SecretsPageContent({
             >
               <div className="space-y-2">
                 {/* Custom folders */}
-                {orderedFolders.length > 0 && (
+                {visibleFolders.length > 0 && (
                   <>
                     <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wide px-1 pt-2">
                       <FolderClosed className="h-3 w-3" />
                       Dossiers
                     </div>
-                    {orderedFolders.map((folder) => (
+                    {visibleFolders.map((folder) => (
                       <SortableFolder
                         key={folder.id}
                         folder={folder}
-                        secrets={secretsByFolder.get(folder.id) || []}
-                        isExpanded={expandedFolders.has(folder.id)}
+                        secrets={filteredSecretsByFolder.get(folder.id) || []}
+                        isExpanded={effectiveExpandedFolders.has(folder.id)}
                         onToggle={() => toggleFolder(folder.id)}
                         onEdit={() => {
                           setFolderToEdit(folder);
@@ -928,21 +1036,21 @@ export function SecretsPageContent({
                 )}
 
                 {/* Client auto-folders */}
-                {clientsWithSecrets.length > 0 && (
+                {visibleClients.length > 0 && (
                   <>
-                    {orderedFolders.length > 0 && (
+                    {visibleFolders.length > 0 && (
                       <div className="border-t my-4" />
                     )}
                     <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wide px-1 pt-2">
                       <Building2 className="h-3 w-3" />
                       Clients
                     </div>
-                    {clientsWithSecrets.map((client) => (
+                    {visibleClients.map((client) => (
                       <ClientFolder
                         key={client.id}
                         client={client}
-                        secrets={secretsByClient.get(client.id) || []}
-                        isExpanded={expandedClients.has(client.id)}
+                        secrets={filteredSecretsByClient.get(client.id) || []}
+                        isExpanded={effectiveExpandedClients.has(client.id)}
                         onToggle={() => toggleClient(client.id)}
                         onSecretClick={setSelectedSecret}
                         selectedSecretId={selectedSecret?.id || null}
@@ -959,8 +1067,8 @@ export function SecretsPageContent({
                 {/* Loose secrets (no folder, no client) - flat list */}
                 {filteredLooseSecrets.length > 0 && (
                   <>
-                    {(orderedFolders.length > 0 ||
-                      clientsWithSecrets.length > 0) && (
+                    {(visibleFolders.length > 0 ||
+                      visibleClients.length > 0) && (
                       <div className="border-t my-4" />
                     )}
                     <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wide px-1 pt-2">

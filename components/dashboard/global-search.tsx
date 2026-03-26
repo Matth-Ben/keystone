@@ -40,7 +40,7 @@ export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
 
     // Recherche quand la query change
     useEffect(() => {
-        if (!debouncedQuery || !currentOrganization) {
+        if (!debouncedQuery) {
             setResults([])
             return
         }
@@ -48,7 +48,11 @@ export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
         const search = async () => {
             setLoading(true)
             try {
-                const searchResults = await globalSearch(debouncedQuery, currentOrganization.id)
+                // Passe null si pas d'organisation (mode "Tous mes secrets")
+                const searchResults = await globalSearch(
+                    debouncedQuery,
+                    currentOrganization?.id ?? null
+                )
                 setResults(searchResults)
             } catch (error) {
                 console.error('Search error:', error)
